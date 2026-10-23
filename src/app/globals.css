@@ -377,6 +377,62 @@ h1, h2, h3, p { margin-top: 0; }
 .audio-expanded-body strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .audio-expanded-body span { color: var(--muted); font-size: 10px; }
 .audio-equalizer { display: grid; place-items: center; width: 39px; height: 39px; border-radius: 12px; color: var(--emerald); background: var(--emerald-pale); }
+/* Reading target, daily progress, and offline controls */
+.khatam-card { padding: 19px; display: flex; flex-direction: column; gap: 16px; }
+.khatam-card-heading { display: flex; align-items: center; gap: 12px; }
+.khatam-icon { display: grid; place-items: center; width: 43px; height: 43px; flex: 0 0 auto; border-radius: 14px; color: #a96b15; background: #fff3d8; }
+.khatam-card-heading > div { min-width: 0; }
+.khatam-card-heading strong { display: block; margin-bottom: 4px; font-size: 13px; font-weight: 800; }
+.khatam-card-heading p { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.6; }
+.khatam-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.khatam-stats > div { display: flex; flex-direction: column; gap: 4px; padding: 13px; border: 1px solid var(--line); border-radius: 13px; background: var(--surface-muted); }
+.khatam-stats strong { font-size: 23px; letter-spacing: -.05em; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.khatam-stats span { color: var(--muted); font-size: 10px; }
+.progress-track { width: 100%; height: 8px; overflow: hidden; border-radius: 99px; background: var(--surface-strong); }
+.progress-track > span { display: block; height: 100%; min-width: 0; border-radius: inherit; background: linear-gradient(90deg, #059669, #49c795); transition: width .35s ease; }
+.khatam-target-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.khatam-target-row > span { color: var(--ink-soft); font-size: 11px; font-weight: 800; }
+.goal-options { display: flex; align-items: center; gap: 5px; padding: 4px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-muted); }
+.goal-options button { min-height: 34px; padding: 0 10px; border: 0; border-radius: 8px; color: var(--muted); background: transparent; font-size: 10px; font-weight: 800; }
+.goal-options button.active { color: white; background: var(--emerald-deep); }
+.theme-dark .goal-options button.active { color: #092319; }
+.daily-target-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.daily-target-heading > div { display: flex; flex-direction: column; gap: 4px; }
+.daily-target-heading strong { font-size: 11px; }
+.daily-target-heading small { color: var(--muted); font-size: 9px; }
+.daily-target-heading > span { color: var(--emerald); font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.progress-track-daily { height: 6px; }
+.progress-footnote { margin: -4px 0 0; color: var(--muted); font-size: 9px; line-height: 1.6; }
+.offline-summary { display: flex; align-items: center; gap: 12px; padding: 15px; }
+.offline-summary-icon { display: grid; place-items: center; width: 42px; height: 42px; flex: 0 0 auto; border-radius: 14px; color: var(--emerald); background: var(--emerald-pale); }
+.offline-summary-copy { flex: 1; min-width: 0; }
+.offline-summary-copy strong { display: block; margin-bottom: 4px; font-size: 11px; font-weight: 800; }
+.offline-summary-copy p { margin: 0; color: var(--muted); font-size: 9px; line-height: 1.6; }
+.offline-summary-action { flex: 0 0 auto; min-height: 40px; }
+.reader-tool-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin: 14px 0; }
+.reader-tool-row .reciter-control { flex: 1 1 245px; }
+.repeat-control { display: flex; align-items: center; gap: 8px; min-height: 42px; padding: 0 11px; border: 1px solid var(--line); border-radius: 13px; color: var(--muted); background: var(--surface); font-size: 10px; }
+.repeat-control > span { color: var(--ink-soft); white-space: nowrap; font-weight: 700; }
+.repeat-control select { max-width: 112px; min-height: 32px; border: 0; outline: 0; color: var(--ink); background: transparent; font-size: 10px; font-weight: 800; }
+.repeat-control select option { color: #172f27; background: #fff; }
+.theme-dark .repeat-control select option { color: #edf8f1; background: #12251d; }
+@media (max-width: 640px) {
+  .khatam-card { padding: 14px; gap: 13px; }
+  .khatam-stats strong { font-size: 21px; }
+  .khatam-stats > div { padding: 11px; }
+  .goal-options { gap: 2px; }
+  .goal-options button { padding: 0 8px; font-size: 9px; }
+  .khatam-target-row { align-items: flex-start; flex-direction: column; }
+  .offline-summary { align-items: flex-start; padding: 13px; }
+  .offline-summary-icon { width: 38px; height: 38px; }
+  .offline-summary-action { margin-top: -5px; }
+  .reader-tool-row { align-items: stretch; flex-direction: column; gap: 8px; }
+  .reader-tool-row .reciter-control { flex: 1 1 auto; }
+  .repeat-control { width: 100%; justify-content: flex-start; min-height: 42px; }
+  .repeat-control select { margin-left: auto; max-width: 140px; }
+  .jump-form { align-self: flex-end; }
+}
+
 /* Modal, toast, generic settings */
 .modal-backdrop { position: fixed; z-index: 60; inset: 0; display: flex; align-items: flex-end; justify-content: center; padding: 16px 12px max(12px, var(--safe-bottom)); background: rgba(7, 27, 19, .49); backdrop-filter: blur(7px); animation: fade-in .18s ease; }
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }

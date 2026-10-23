@@ -10,8 +10,8 @@
 </p>
 
 <p align="center">
-  <img alt="Next.js App Router" src="https://img.shields.io/badge/Next.js-App_Router-111111?logo=nextdotjs" />
-  <img alt="React 18" src="https://img.shields.io/badge/React-18-149ECA?logo=react&logoColor=white" />
+  <img alt="Next.js 15.5.28" src="https://img.shields.io/badge/Next.js-15.5.28-111111?logo=nextdotjs" />
+  <img alt="React 19.2.9" src="https://img.shields.io/badge/React-19.2.9-149ECA?logo=react&logoColor=white" />
   <img alt="Tailwind CSS" src="https://img.shields.io/badge/Tailwind_CSS-v3-06B6D4?logo=tailwindcss&logoColor=white" />
   <img alt="PWA" src="https://img.shields.io/badge/PWA-Installable-5A0FC8?logo=pwa&logoColor=white" />
   <img alt="Bahasa Indonesia" src="https://img.shields.io/badge/Bahasa-Indonesia-059669" />
@@ -21,7 +21,8 @@
   <a href="#fitur-utama">Lihat fitur</a> ·
   <a href="#mulai-di-lokal">Mulai di lokal</a> ·
   <a href="#deploy-ke-vercel">Deploy ke Vercel</a> ·
-  <a href="#pwa-dan-mode-offline">PWA & offline</a>
+  <a href="#pwa-dan-mode-offline">PWA & offline</a> ·
+  <a href="./docs/DEPLOYMENT_CHECKLIST.md">Checklist deployment</a>
 </p>
 
 ---
@@ -38,7 +39,10 @@
 |---|---|
 | 📖 **Al-Qur'an** | Katalog 114 surah, pencarian dan filter Makkiyah/Madaniyah, tampilan ayat Arab, latin, dan terjemahan, serta kontrol ukuran teks. |
 | 🧠 **Mode hafalan** | Sembunyikan atau tampilkan teks Arab, transliterasi, dan terjemahan secara terpisah. |
-| 🔖 **Bookmark & lanjut baca** | Simpan penanda ayat dan preferensi membaca pada perangkat. |
+| 🔖 **Bookmark & lanjut baca** | Simpan penanda ayat, posisi terakhir, dan preferensi membaca pada perangkat. |
+| 🎯 **Progres tilawah & target khatam** | Hitung ayat yang ditandai saat dibaca, pantau progres keseluruhan dan target harian, serta pilih target 30, 60, atau 90 hari. |
+| 🔁 **Murajaah audio** | Ulangi audio per ayat 3×, 5×, 10×, atau tanpa batas; pilihan disimpan secara lokal. |
+| 📥 **Surah offline** | Tandai surah yang telah dimuat untuk akses offline dan filter daftar surah yang ditandai. |
 | 🎧 **Audio murottal** | Pilihan lima qari sesuai PRD, pemutaran surah/ayat, penyorotan ayat yang aktif, dan pemutar yang tetap mudah dijangkau. Ketersediaan audio mengikuti respons sumber data. |
 | 📚 **Tafsir** | Tampilan tafsir surah/ayat berdasarkan data yang disediakan API. |
 | 🕌 **Jadwal shalat** | Pencarian kota/kabupaten di Indonesia, filter wilayah pulau, dan wilayah awal **Kab. Bogor**. |
@@ -49,7 +53,7 @@
 
 ## Teknologi
 
-- **Framework:** Next.js App Router dan React.
+- **Framework:** Next.js 15.5.28 App Router dan React 19.2.9.
 - **Styling:** Tailwind CSS v3 dan CSS responsif khusus aplikasi.
 - **Ikon:** Lucide React.
 - **Penyimpanan di perangkat:** `localStorage` untuk preferensi, bookmark, riwayat, dan data yang pernah dimuat.
@@ -60,7 +64,7 @@
 
 ### Prasyarat
 
-- Node.js **18.17 atau lebih baru** untuk versi proyek saat ini (disarankan Node.js LTS yang masih didukung).
+- Node.js **20.9.0 atau lebih baru** (disarankan Node.js 22 LTS).
 - npm.
 - Koneksi internet untuk instalasi dependency dan mengambil data terbaru dari API.
 
@@ -81,7 +85,7 @@
 
 4. Buka [http://localhost:3000](http://localhost:3000).
 
-Setelah `npm install`, simpan `package-lock.json` ke Git agar instalasi di komputer lain dan layanan CI/deployment lebih konsisten.
+Setelah `npm install`, simpan `package-lock.json` ke Git agar instalasi di komputer lain dan layanan CI/deployment lebih konsisten. Lihat juga [checklist pra-deployment](./docs/DEPLOYMENT_CHECKLIST.md).
 
 ### Periksa sebelum deploy
 
@@ -137,22 +141,23 @@ Cara termudah adalah menghubungkan repository GitHub ke Vercel. Integrasi Git da
 
 Panduan resmi: [Deploy Git Repository di Vercel](https://vercel.com/docs/git) · [Next.js di Vercel](https://vercel.com/docs/frameworks/full-stack/nextjs) · [Environment Variables Vercel](https://vercel.com/docs/environment-variables).
 
-### Penting: pembaruan keamanan sebelum publikasi
+### Pembaruan keamanan dan versi framework
 
-> [!WARNING]
-> `package.json` pada source saat ini masih mengunci Next.js dan `eslint-config-next` ke **14.2.35** untuk mengikuti versi mayor pada PRD awal. Pada **20 Oktober 2026**, advisori keamanan menyatakan versi Next.js 10.x–15.x sebelum **15.5.28** termasuk rentang versi terdampak oleh pembaruan keamanan kritis terkait. **Jangan menjadikan versi dependency saat ini sebagai rilis produksi publik tanpa meninjau dan menerapkan patch keamanan yang sesuai.**
+`package.json` kini mengunci **Next.js 15.5.28**, **`eslint-config-next` 15.5.28**, **React 19.2.9**, dan **React DOM 19.2.9**. Versi ini dipilih untuk memenuhi patch keamanan Next.js yang diumumkan pada Oktober 2026. Tetap periksa advisori resmi secara berkala dan gunakan patch lebih baru yang kompatibel jika sudah tersedia.
 
-Sebelum deploy publik, naikkan Next.js dan `eslint-config-next` ke versi yang sudah ditambal dan kompatibel, lalu jalankan kembali `npm install`, `npm run lint`, dan `npm run build`. Jika tetap memakai jalur Next.js 15.x, `15.5.28` adalah batas minimum yang disebut pada advisori tanggal di atas; periksa sumber resmi untuk patch terbaru sebelum melakukan upgrade.
+> [!IMPORTANT]
+> Dependency upgrade sudah ditulis pada konfigurasi proyek, tetapi `npm install`, lint, dan build produksi perlu dijalankan pada komputer pengembang atau CI sebelum deployment. Instalasi registry pada lingkungan penyusunan source mengalami timeout sehingga build produksi belum dapat diverifikasi di sini. Setelah instalasi berhasil, commit `package-lock.json` agar build lokal dan Vercel menggunakan resolusi dependency yang konsisten.
 
 - [Advisori keamanan — Cyber Security Agency of Singapore, 20 Oktober 2026](https://www.csa.gov.sg/alerts-and-advisories/alerts/al-2026-148/)
 - [Next.js Security Advisories](https://github.com/vercel/next.js/security/advisories)
+- [Panduan resmi upgrade Next.js 15](https://nextjs.org/docs/app/guides/upgrading/version-15)
 
 ## PWA dan mode offline
 
 - `public/manifest.webmanifest` mengatur nama aplikasi, ikon, warna tema, mode standalone, dan shortcut.
-- `public/sw.js` mengatur cache app shell, aset same-origin, serta respons GET yang berhasil dari beberapa endpoint API.
-- Preferensi membaca, bookmark, posisi baca, sebagian metadata/ayat yang telah dimuat, doa, dan jadwal shalat terakhir juga dapat disimpan di browser.
-- **Offline bersifat progresif, bukan salinan penuh semua data.** Konten umumnya perlu berhasil dimuat setidaknya sekali saat online sebelum tersedia dari cache. Audio murottal masih dapat membutuhkan koneksi internet.
+- `public/sw.js` mengatur cache app shell, aset statis Next.js yang memakai nama ber-hash, serta respons GET yang berhasil dari beberapa endpoint API. Versi cache lama dibersihkan saat service worker baru aktif.
+- Preferensi membaca, bookmark, posisi baca, daftar ayat yang telah dibaca, target khatam, mode pengulangan audio, surah yang ditandai offline, sebagian metadata/ayat yang telah dimuat, doa, dan jadwal shalat terakhir juga dapat disimpan di browser.
+- **Offline bersifat progresif, bukan salinan penuh semua data.** Konten perlu berhasil dimuat saat online; dari halaman baca, gunakan **Simpan offline** untuk menandai surah dan menyimpan ayat di perangkat. Data tetap bergantung pada kapasitas penyimpanan browser dan bisa dihapus oleh pengguna/browser. Audio murottal masih dapat membutuhkan koneksi internet.
 - Instalasi PWA pada deployment publik membutuhkan HTTPS. `localhost` didukung untuk pengembangan.
 
 ## Sumber data
@@ -215,7 +220,7 @@ alquran-digital-nextjs/
 
 Pendekatan design-system-first dan catatan audit UI/UX ada di [`design-system/MASTER.md`](./design-system/MASTER.md) dan [`design-system/UI_UX_AUDIT.md`](./design-system/UI_UX_AUDIT.md). PRD asli tersedia di [`docs/PRD.md`](./docs/PRD.md).
 
-Beberapa ide yang tercantum sebagai pengembangan lanjutan dalam PRD dan belum termasuk pada implementasi ini: warna tajwid otomatis, kompas kiblat, catatan pribadi per ayat, dan unduhan audio offline.
+Fitur lanjutan yang masih disiapkan: pencarian ayat berdasarkan topik, catatan tadabbur, warna tajwid otomatis yang bersumber dari data tepercaya, kompas kiblat, pengingat terjadwal, sinkronisasi antarperangkat, dan unduhan audio offline.
 
 ## Kontribusi
 

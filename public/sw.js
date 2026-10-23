@@ -1,5 +1,5 @@
 /* Lightweight app-shell service worker for the Next.js App Router. */
-const SW_VERSION = 'nurani-pwa-v7';
+const SW_VERSION = 'nurani-pwa-v8';
 const APP_SHELL_CACHE = `${SW_VERSION}-shell`;
 const API_CACHE = `${SW_VERSION}-api`;
 const RUNTIME_CACHE = `${SW_VERSION}-runtime`;
@@ -28,8 +28,25 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
 
-  // Let Next.js build assets use its own immutable filenames/browser cache.
-  // Never cache these in our runtime cache: stale dev chunks can cause hydration errors.
+  // Production Next.js assets use content-hashed filenames. Cache-first is safe for
+  // those immutable files and makes an already-installed PWA boot when offline.
+  // The active cache namespace is versioned; activation removes stale deployment caches.
+  if (url.origin === self.location.origin && url.pathname.startsWith('/_next/static/')) {
+    event.respondWith((async () => {
+      const cache = await caches.open(RUNTIME_CACHE);
+      const cached = await cache.match(request);
+      if (cached) return cached;
+      try {
+        const response = await fetch(request);
+        if (response && response.ok) cache.put(request, response.clone()).catch(() => {});
+        return response;
+      } catch {
+        return cached || Response.error();
+      }
+    })());
+    return;
+  }
+  // Other internal Next.js endpoints remain under framework control.
   if (url.origin === self.location.origin && url.pathname.startsWith('/_next/')) return;
 
   // The doa catalogue uses network-first so a malformed older API response is not

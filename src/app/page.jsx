@@ -6,7 +6,7 @@ import {
   ChevronDown, ChevronLeft, ChevronRight, Clock3, Copy, Download, HandHeart,
   Headphones, Heart, Home, Info, ListFilter, LoaderCircle, MapPin, Minus, Moon,
   MoreHorizontal, Pause, Play, Plus, RefreshCw, Search, Settings2, ShieldCheck,
-  SlidersHorizontal, Sparkles, Sun, Wifi, WifiOff, X
+  SlidersHorizontal, Sparkles, Sun, Wifi, WifiOff, X, Repeat, Target
 } from 'lucide-react';
 import { asmaulHusna, enforceBeforeMealDua, fallbackDuas, fallbackSurahs, MIN_DUA_CATALOG_SIZE } from '@/lib/data';
 import {
@@ -34,6 +34,21 @@ const PRAYERS = [
   { key: 'isya', label: 'Isya' }
 ];
 
+const TOTAL_QURAN_VERSES = 6236;
+const KHATAM_OPTIONS = [30, 60, 90];
+const AUDIO_REPEAT_OPTIONS = [
+  { value: 'off', label: 'Mati' },
+  { value: '3', label: '3×' },
+  { value: '5', label: '5×' },
+  { value: '10', label: '10×' },
+  { value: 'infinite', label: 'Tanpa batas' }
+];
+function jakartaDateKey(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(date);
+  const part = (type) => parts.find((item) => item.type === type)?.value || '';
+  return `${part('year')}-${part('month')}-${part('day')}`;
+}
+
 function readLocal(key, fallback) {
   try {
     const raw = window.localStorage.getItem(key);
@@ -43,7 +58,7 @@ function readLocal(key, fallback) {
   }
 }
 function writeLocal(key, value) {
-  try { window.localStorage.setItem(key, JSON.stringify(value)); } catch { /* Storage can be disabled. */ }
+  try { window.localStorage.setItem(key, JSON.stringify(value)); return true; } catch { return false; /* Storage can be disabled or full. */ }
 }
 function readDuaText(value) {
   if (typeof value === 'string' || typeof value === 'number') return String(value).trim();
@@ -223,6 +238,10 @@ export default function HomePage() {
   const [bookmarkedSurahs, setBookmarkedSurahs] = useState([]);
   const [bookmarkedVerses, setBookmarkedVerses] = useState([]);
   const [lastRead, setLastRead] = useState(null);
+  const [readVerseKeys, setReadVerseKeys] = useState([]);
+  const [readingDays, setReadingDays] = useState({});
+  const [khatamDays, setKhatamDays] = useState(30);
+  const [offlineSurahs, setOfflineSurahs] = useState([]);
   const [tafsirModal, setTafsirModal] = useState(null);
   const [tafsirLoading, setTafsirLoading] = useState(false);
   const [jumpVerse, setJumpVerse] = useState('');
@@ -230,7 +249,9 @@ export default function HomePage() {
   const [audioInfo, setAudioInfo] = useState(null);
   const [audioPlaying, setAudioPlaying] = useState(false);
   const [audioExpanded, setAudioExpanded] = useState(false);
+  const [audioRepeat, setAudioRepeat] = useState('off');
   const audioRef = useRef(null);
+  const repeatCountRef = useRef(0);
   const pendingJumpRef = useRef(null);
 
   const [duas, setDuas] = useState(() => enforceBeforeMealDua(fallbackDuas.map(normalizeDua)));
@@ -259,6 +280,26 @@ export default function HomePage() {
     showToast.timeout = window.setTimeout(() => setToast(''), 2800);
   }, []);
 
+  const markVerseRead = useCallback((surahNumber, verseNumber) => {
+    const surahId = Number(surahNumber);
+    const ayah = Number(verseNumber);
+    if (!Number.isInteger(surahId) || surahId < 1 || surahId > 114 || !Number.isInteger(ayah) || ayah < 1) return;
+    const key = `${surahId}:${ayah}`;
+    setReadVerseKeys((previous) => previous.includes(key) ? previous : [...previous, key].slice(-TOTAL_QURAN_VERSES));
+    const today = jakartaDateKey();
+    setReadingDays((previous) => {
+      const todayKeys = Array.isArray(previous?.[today]) ? previous[today] : [];
+      if (todayKeys.includes(key)) return previous;
+      const next = { ...previous, [today]: [...todayKeys, key] };
+      const keepDates = Object.keys(next).sort().slice(-90);
+      return Object.fromEntries(keepDates.map((date) => [date, next[date]]));
+    });
+    const knownSurah = surahs.find((item) => Number(item.nomor) === surahId) || fallbackSurahs[surahId - 1];
+    setLastRead((previous) => (Number(previous?.surahId) === surahId && Number(previous?.verse) === ayah)
+      ? previous
+      : { surahId, surahName: knownSurah?.namaLatin || `Surah ${surahId}`, verse: ayah, updatedAt: Date.now() });
+  }, [surahs]);
+
   useEffect(() => {
     setDateLabel(formatToday());
     const tabFromUrl = new URLSearchParams(window.location.search).get('tab');
@@ -277,6 +318,16 @@ export default function HomePage() {
     setBookmarkedSurahs(readLocal('aq:bookmarked-surahs', []));
     setBookmarkedVerses(readLocal('aq:bookmarked-verses', []));
     setLastRead(readLocal('aq:last-read', null));
+    const savedReadVerseKeys = readLocal('aq:read-verse-keys', []);
+    setReadVerseKeys(Array.isArray(savedReadVerseKeys) ? [...new Set(savedReadVerseKeys.filter((key) => /^\d{1,3}:\d{1,3}$/.test(String(key))))].slice(-TOTAL_QURAN_VERSES) : []);
+    const savedReadingDays = readLocal('aq:reading-days', {});
+    setReadingDays(savedReadingDays && typeof savedReadingDays === 'object' && !Array.isArray(savedReadingDays) ? savedReadingDays : {});
+    const savedKhatamDays = Number(readLocal('aq:khatam-days', 30));
+    setKhatamDays(KHATAM_OPTIONS.includes(savedKhatamDays) ? savedKhatamDays : 30);
+    const savedOfflineSurahs = readLocal('aq:offline-surahs', []);
+    setOfflineSurahs(Array.isArray(savedOfflineSurahs) ? [...new Set(savedOfflineSurahs.map(Number).filter((id) => Number.isInteger(id) && id >= 1 && id <= 114))] : []);
+    const savedAudioRepeat = readLocal('aq:audio-repeat', 'off');
+    setAudioRepeat(AUDIO_REPEAT_OPTIONS.some((option) => option.value === savedAudioRepeat) ? savedAudioRepeat : 'off');
     setFavoriteAsma(readLocal('aq:favorite-asma', []));
     const prefs = readLocal('aq:reader-prefs', null);
     if (prefs) {
@@ -306,7 +357,9 @@ export default function HomePage() {
 
     if ('serviceWorker' in navigator) {
       if (process.env.NODE_ENV === 'production') {
-        navigator.serviceWorker.register('/sw.js').catch(() => { /* PWA enhancement is non-blocking. */ });
+        navigator.serviceWorker.register('/sw.js').then(() => {
+          if (navigator.storage?.persist) navigator.storage.persist().catch(() => {});
+        }).catch(() => { /* PWA enhancement is non-blocking. */ });
       } else {
         // A production PWA worker can serve stale Next.js chunks during `next dev`,
         // which may make the browser bundle disagree with freshly rendered HTML.
@@ -431,6 +484,21 @@ export default function HomePage() {
     writeLocal('aq:last-read', lastRead);
   }, [lastRead]);
   useEffect(() => {
+    writeLocal('aq:read-verse-keys', readVerseKeys);
+  }, [readVerseKeys]);
+  useEffect(() => {
+    writeLocal('aq:reading-days', readingDays);
+  }, [readingDays]);
+  useEffect(() => {
+    writeLocal('aq:khatam-days', khatamDays);
+  }, [khatamDays]);
+  useEffect(() => {
+    writeLocal('aq:offline-surahs', offlineSurahs);
+  }, [offlineSurahs]);
+  useEffect(() => {
+    writeLocal('aq:audio-repeat', audioRepeat);
+  }, [audioRepeat]);
+  useEffect(() => {
     writeLocal('aq:favorite-asma', favoriteAsma);
   }, [favoriteAsma]);
   useEffect(() => {
@@ -455,10 +523,11 @@ export default function HomePage() {
       const matchesFilter = surahFilter === 'all'
         || (surahFilter === 'mekah' && (place.includes('mekah') || place.includes('makki')))
         || (surahFilter === 'madinah' && (place.includes('madinah') || place.includes('madani')))
-        || (surahFilter === 'bookmarked' && bookmarkedSurahs.includes(Number(surah.nomor)));
+        || (surahFilter === 'bookmarked' && bookmarkedSurahs.includes(Number(surah.nomor)))
+        || (surahFilter === 'offline' && offlineSurahs.includes(Number(surah.nomor)));
       return matchesQuery && matchesFilter;
     });
-  }, [surahs, surahQuery, surahFilter, bookmarkedSurahs]);
+  }, [surahs, surahQuery, surahFilter, bookmarkedSurahs, offlineSurahs]);
   const filteredDuas = useMemo(() => duas.filter((dua) => {
     const q = duaQuery.trim().toLowerCase();
     return !q || [dua.judul, dua.latin, dua.terjemah, dua.grup, ...(dua.tags || [])].join(' ').toLowerCase().includes(q);
@@ -468,6 +537,12 @@ export default function HomePage() {
     return !q || [name.latin, name.arabic, name.meaning, name.number].join(' ').toLowerCase().includes(q)
       || (q === 'favorit' && favoriteAsma.includes(name.number));
   }), [asmaQuery, favoriteAsma]);
+  const todayKey = jakartaDateKey();
+  const todayReadCount = Array.isArray(readingDays?.[todayKey]) ? readingDays[todayKey].length : 0;
+  const completedVerseCount = Math.min(readVerseKeys.length, TOTAL_QURAN_VERSES);
+  const overallReadingPercent = Math.min(100, Math.round((completedVerseCount / TOTAL_QURAN_VERSES) * 100));
+  const dailyVerseTarget = Math.ceil(TOTAL_QURAN_VERSES / khatamDays);
+  const dailyReadingPercent = Math.min(100, Math.round((todayReadCount / dailyVerseTarget) * 100));
 
   const openSurah = useCallback(async (surahValue, verseNumber = 1) => {
     const surah = typeof surahValue === 'number'
@@ -478,6 +553,7 @@ export default function HomePage() {
     setJumpVerse(String(verseNumber || 1));
     pendingJumpRef.current = Number(verseNumber || 1);
     setLastRead({ surahId: Number(surah.nomor), surahName: surah.namaLatin, verse: Number(verseNumber || 1), updatedAt: Date.now() });
+    markVerseRead(Number(surah.nomor), Number(verseNumber || 1));
     const cacheKey = `aq:verses:${surah.nomor}`;
     const cached = readLocal(cacheKey, null);
     if (Array.isArray(cached) && cached.length) setVerses(cached);
@@ -492,7 +568,28 @@ export default function HomePage() {
     } finally {
       setVerseLoading(false);
     }
-  }, [surahs, showToast]);
+  }, [surahs, showToast, markVerseRead]);
+
+  useEffect(() => {
+    if (!selectedSurah || !verses.length || typeof IntersectionObserver === 'undefined') return undefined;
+    let observer;
+    // If a specific verse was requested, wait until the jump scroll completes so
+    // the initial viewport does not incorrectly count the top of the surah as read.
+    const observeDelay = pendingJumpRef.current ? 240 : 0;
+    const timer = window.setTimeout(() => {
+      observer = new IntersectionObserver((entries) => {
+        const visible = entries.filter((entry) => entry.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio);
+        if (!visible.length) return;
+        const verseNumber = Number(visible[0].target.getAttribute('data-verse-number'));
+        if (verseNumber) markVerseRead(Number(selectedSurah.nomor), verseNumber);
+      }, { rootMargin: '-38% 0px -42% 0px', threshold: [0, 0.15, 0.4] });
+      verses.forEach((verse) => {
+        const node = document.getElementById(`verse-${selectedSurah.nomor}-${verse.nomorAyat}`);
+        if (node) { node.setAttribute('data-verse-number', String(verse.nomorAyat)); observer.observe(node); }
+      });
+    }, observeDelay);
+    return () => { window.clearTimeout(timer); observer?.disconnect(); };
+  }, [selectedSurah?.nomor, verses, markVerseRead]);
 
   useEffect(() => {
     if (!selectedSurah || !verses.length || !pendingJumpRef.current) return;
@@ -517,8 +614,9 @@ export default function HomePage() {
   const playVerse = (verse, index) => {
     const src = chooseAudio(verse.audio, qariIndex);
     if (!src) { showToast('Audio per ayat belum disediakan oleh sumber untuk pilihan ini.'); return; }
+    repeatCountRef.current = 0;
     setAudioInfo({ src, title: `${selectedSurah?.namaLatin || 'Al-Qur’an'} · Ayat ${verse.nomorAyat}`, subtitle: QARIS[qariIndex], trackType: 'verse', verseIndex: index, surahNumber: selectedSurah?.nomor });
-    setLastRead({ surahId: Number(selectedSurah?.nomor), surahName: selectedSurah?.namaLatin, verse: Number(verse.nomorAyat), updatedAt: Date.now() });
+    markVerseRead(Number(selectedSurah?.nomor), Number(verse.nomorAyat));
     window.setTimeout(() => document.getElementById(`verse-${selectedSurah?.nomor}-${verse.nomorAyat}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100);
   };
   const playFullSurah = () => {
@@ -527,9 +625,39 @@ export default function HomePage() {
     if (!src) { showToast('Audio penuh surah belum tersedia pada data yang diterima.'); return; }
     setAudioInfo({ src, title: selectedSurah.namaLatin, subtitle: `Murottal · ${QARIS[qariIndex]}`, trackType: 'full', surahNumber: selectedSurah.nomor, verseIndex: 0 });
   };
+  const saveCurrentSurahOffline = () => {
+    if (!selectedSurah || !verses.length) {
+      showToast('Buka surah dan tunggu ayatnya termuat sebelum menyimpan offline.');
+      return;
+    }
+    const id = Number(selectedSurah.nomor);
+    // Explicitly pin the currently loaded surah and metadata for offline access.
+    // API responses are also cached by the service worker when available.
+    const verseSaved = writeLocal(`aq:verses:${id}`, verses);
+    const metadataSaved = writeLocal('aq:surahs', surahs);
+    if (!verseSaved || !metadataSaved) {
+      showToast('Penyimpanan perangkat penuh atau tidak tersedia. Kosongkan ruang lalu coba lagi.');
+      return;
+    }
+    setOfflineSurahs((previous) => previous.includes(id) ? previous : [...previous, id].sort((a, b) => a - b));
+    showToast(`${selectedSurah.namaLatin} disimpan untuk akses offline di perangkat ini.`);
+  };
   const handleAudioEnded = () => {
     setAudioPlaying(false);
     if (audioInfo?.trackType === 'verse' && selectedSurah) {
+      const repeatTotal = audioRepeat === 'infinite' ? Number.POSITIVE_INFINITY : (audioRepeat === 'off' ? 1 : Number(audioRepeat));
+      if (repeatTotal > 1 && (repeatTotal === Number.POSITIVE_INFINITY || repeatCountRef.current < repeatTotal - 1)) {
+        repeatCountRef.current += 1;
+        if (audioRef.current) {
+          audioRef.current.currentTime = 0;
+          audioRef.current.play().then(() => setAudioPlaying(true)).catch(() => {
+            setAudioPlaying(false);
+            showToast('Audio tidak dapat diulang. Periksa koneksi atau sumber audio.');
+          });
+        }
+        return;
+      }
+      repeatCountRef.current = 0;
       const nextIndex = Number(audioInfo.verseIndex) + 1;
       if (verses[nextIndex]) playVerse(verses[nextIndex], nextIndex);
     }
@@ -656,6 +784,19 @@ export default function HomePage() {
         <div className="hero-bottom-line"><span>01</span><div /><span>Tilawah • Tadabbur • Doa</span></div>
       </section>
 
+      <section className="section-block khatam-section">
+        <div className="section-heading"><div><p className="eyebrow">KONSISTEN BERTILAWAH</p><h2>Target khatam</h2></div><span className="tiny-status"><Target size={13} /> {khatamDays} hari</span></div>
+        <div className="khatam-card card-surface">
+          <div className="khatam-card-heading"><span className="khatam-icon"><BookMarked size={20} /></span><div><strong>Perjalanan Al-Qur’anmu</strong><p>Setiap ayat yang kamu baca akan dihitung di perangkat ini.</p></div></div>
+          <div className="khatam-stats"><div><strong>{completedVerseCount.toLocaleString('id-ID')}</strong><span>ayat ditandai dibaca</span></div><div><strong>{overallReadingPercent}%</strong><span>progres keseluruhan</span></div></div>
+          <div className="progress-track" role="progressbar" aria-label="Progres membaca Al-Qur’an" aria-valuemin={0} aria-valuemax={100} aria-valuenow={overallReadingPercent}><span style={{ width: `${overallReadingPercent}%` }} /></div>
+          <div className="khatam-target-row"><span>Target khatam</span><div className="goal-options" role="group" aria-label="Pilih target khatam">{KHATAM_OPTIONS.map((days) => <button key={days} type="button" className={khatamDays === days ? 'active' : ''} onClick={() => setKhatamDays(days)} aria-pressed={khatamDays === days}>{days} hari</button>)}</div></div>
+          <div className="daily-target-heading"><div><strong>{todayReadCount.toLocaleString('id-ID')} / {dailyVerseTarget.toLocaleString('id-ID')} ayat hari ini</strong><small>Target harian untuk khatam dalam {khatamDays} hari</small></div><span>{dailyReadingPercent}%</span></div>
+          <div className="progress-track progress-track-daily" role="progressbar" aria-label="Progres target membaca hari ini" aria-valuemin={0} aria-valuemax={100} aria-valuenow={dailyReadingPercent}><span style={{ width: `${dailyReadingPercent}%` }} /></div>
+          <p className="progress-footnote">Progres berdasarkan ayat yang terlihat saat membaca. Data disimpan lokal dan tidak memerlukan akun.</p>
+        </div>
+      </section>
+
       <section className="section-block">
         <div className="section-heading"><div><p className="eyebrow">RUTINITAS HARIAN</p><h2>Ringkasan ibadah</h2></div><span className="tiny-status"><span /> {online ? 'Terhubung' : 'Offline'}</span></div>
         <div className="prayer-summary card-surface">
@@ -694,6 +835,12 @@ export default function HomePage() {
         </div>
       </section>
 
+      <section className="offline-summary card-surface">
+        <span className="offline-summary-icon">{online ? <Download size={19} /> : <WifiOff size={19} />}</span>
+        <div className="offline-summary-copy"><strong>{online ? 'Siap dibaca tanpa internet' : 'Nurani sedang offline'}</strong><p>{offlineSurahs.length > 0 ? `${offlineSurahs.length} surah ditandai untuk akses offline. ` : 'Surah yang sudah dimuat dapat disimpan di perangkat. '}{online ? 'Simpan surah dari halaman baca untuk menandainya sebagai favorit offline.' : 'Surah yang sudah pernah dibuka dan disimpan tetap tersedia di perangkat.'}</p></div>
+        <button className="text-link offline-summary-action" onClick={() => { setSelectedSurah(null); setActiveTab('quran'); setSurahFilter(offlineSurahs.length ? 'offline' : 'all'); }}><span>{offlineSurahs.length ? 'Lihat' : 'Jelajahi'}</span><ArrowRight size={15} /></button>
+      </section>
+
       <section className="daily-reminder">
         <div className="reminder-symbol"><Heart size={17} /></div><div><strong>Pelan-pelan, yang penting istiqamah.</strong><p>Satu ayat yang dibaca dengan hati lebih baik daripada terburu-buru tanpa memahami.</p></div>
       </section>
@@ -705,7 +852,7 @@ export default function HomePage() {
       <section className="page-title-row"><div><p className="eyebrow">KITAB SUCI UMAT ISLAM</p><h1>Al-Qur’an</h1><p className="muted">Baca dan pahami ayat demi ayat.</p></div><div className="quran-count-pill"><BookOpen size={16} /><strong>114</strong><span>Surah</span></div></section>
       <div className="quran-search search-box"><Search size={18} /><input value={surahQuery} onChange={(event) => setSurahQuery(event.target.value)} placeholder="Cari nama surah, arti, atau nomor…" aria-label="Cari surah" />{surahQuery && <button aria-label="Hapus pencarian" onClick={() => setSurahQuery('')}><X size={16} /></button>}</div>
       <div className="filter-chips" role="group" aria-label="Filter surah">
-        {[['all','Semua'],['mekah','Makkiyah'],['madinah','Madaniyah'],['bookmarked','Bookmark']].map(([value,label]) => <button key={value} className={`filter-chip ${surahFilter === value ? 'active' : ''}`} onClick={() => setSurahFilter(value)}>{value === 'bookmarked' && <Bookmark size={13} />}{label}{value === 'bookmarked' && bookmarkedSurahs.length > 0 ? ` (${bookmarkedSurahs.length})` : ''}</button>)}
+        {[['all','Semua'],['mekah','Makkiyah'],['madinah','Madaniyah'],['bookmarked','Bookmark'],['offline','Offline']].map(([value,label]) => <button key={value} className={`filter-chip ${surahFilter === value ? 'active' : ''}`} onClick={() => setSurahFilter(value)}>{value === 'bookmarked' && <Bookmark size={13} />}{value === 'offline' && <Download size={13} />}{label}{value === 'bookmarked' && bookmarkedSurahs.length > 0 ? ` (${bookmarkedSurahs.length})` : ''}{value === 'offline' && offlineSurahs.length > 0 ? ` (${offlineSurahs.length})` : ''}</button>)}
       </div>
       <div className="results-caption"><span>{surahLoading ? 'Memperbarui daftar…' : `${filteredSurahs.length} surah ditemukan`}</span><span><ListFilter size={14} /> Urut sesuai mushaf</span></div>
       <div className="surah-grid">
@@ -729,7 +876,7 @@ export default function HomePage() {
       <section className="reader-surah-hero">
         <div className="reader-surah-heading"><div><p className="eyebrow">SURAH KE-{selectedSurah?.nomor || '—'}</p><h1>{selectedSurah?.namaLatin}</h1><p>{selectedSurah?.arti} <span>·</span> {selectedSurah?.tempatTurun || 'Al-Qur’an'} <span>·</span> {selectedSurah?.jumlahAyat || verses.length} ayat</p></div><div className="reader-surah-arabic" dir="rtl">{selectedSurah?.nama || ''}</div></div>
         <div className="bismillah" dir="rtl">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</div>
-        <div className="reader-actions"><button className="button button-gold" onClick={playFullSurah}><Play size={16} fill="currentColor" /> Putar satu surah</button><button className="button button-glass" onClick={() => openTafsir()}><BookOpen size={16} /> Tafsir</button><button className={`button button-glass ${readerSettingsOpen ? 'selected' : ''}`} onClick={() => setReaderSettingsOpen((value) => !value)}><SlidersHorizontal size={16} /> Tampilan</button></div>
+        <div className="reader-actions"><button className="button button-gold" onClick={playFullSurah}><Play size={16} fill="currentColor" /> Putar satu surah</button><button className="button button-glass" onClick={() => openTafsir()}><BookOpen size={16} /> Tafsir</button><button className={`button button-glass ${offlineSurahs.includes(Number(selectedSurah?.nomor)) ? 'selected' : ''}`} onClick={saveCurrentSurahOffline} disabled={!verses.length || offlineSurahs.includes(Number(selectedSurah?.nomor))}>{offlineSurahs.includes(Number(selectedSurah?.nomor)) ? <Check size={16} /> : <Download size={16} />} {offlineSurahs.includes(Number(selectedSurah?.nomor)) ? 'Tersimpan offline' : 'Simpan offline'}</button><button className={`button button-glass ${readerSettingsOpen ? 'selected' : ''}`} onClick={() => setReaderSettingsOpen((value) => !value)}><SlidersHorizontal size={16} /> Tampilan</button></div>
       </section>
       {readerSettingsOpen && <section className="reader-settings card-surface">
         <div className="settings-panel-heading"><div><strong>Pengaturan bacaan</strong><span>Atur sesuai kenyamananmu</span></div><button className="icon-button small" onClick={() => setReaderSettingsOpen(false)} aria-label="Tutup pengaturan"><X size={17} /></button></div>
@@ -743,6 +890,7 @@ export default function HomePage() {
       </section>}
       <div className="reader-tool-row">
         <div className="reciter-control"><Headphones size={16} /><select value={qariIndex} onChange={(event) => setQariIndex(Number(event.target.value))} aria-label="Pilih qari">{QARIS.map((qari, index) => <option value={index} key={qari}>{qari}</option>)}</select><ChevronDown size={15} /></div>
+        <label className="repeat-control"><Repeat size={16} /><span>Ulang ayat</span><select value={audioRepeat} onChange={(event) => { setAudioRepeat(event.target.value); repeatCountRef.current = 0; }} aria-label="Atur pengulangan ayat">{AUDIO_REPEAT_OPTIONS.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}</select></label>
         <form className="jump-form" onSubmit={(event) => { event.preventDefault(); const n = Math.min(Math.max(Number(jumpVerse) || 1, 1), verses.length || Number(selectedSurah?.jumlahAyat) || 1); pendingJumpRef.current = n; document.getElementById(`verse-${selectedSurah?.nomor}-${n}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }}><label htmlFor="jump-verse">Ayat</label><input id="jump-verse" type="number" min="1" max={selectedSurah?.jumlahAyat || 999} value={jumpVerse} onChange={(event) => setJumpVerse(event.target.value)} /><button type="submit" aria-label="Lompat ke ayat"><ArrowRight size={16} /></button></form>
       </div>
       {verseLoading && !verses.length && <div className="verse-skeletons">{[0,1,2].map((item) => <div className="verse-skeleton card-surface" key={item}><div /><div /><div /></div>)}</div>}
