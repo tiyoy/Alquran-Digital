@@ -1,9 +1,9 @@
 /* Lightweight app-shell service worker for the Next.js App Router. */
-const SW_VERSION = 'nurani-pwa-v10';
+const SW_VERSION = 'nurani-pwa-v11';
 const APP_SHELL_CACHE = `${SW_VERSION}-shell`;
 const API_CACHE = `${SW_VERSION}-api`;
 const RUNTIME_CACHE = `${SW_VERSION}-runtime`;
-const APP_SHELL_URLS = ['/', '/offline.html', '/manifest.webmanifest', '/favicon.svg'];
+const APP_SHELL_URLS = ['/', '/quran', '/jadwal-shalat', '/doa', '/asmaul-husna', '/offline.html', '/manifest.webmanifest', '/favicon.svg'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {

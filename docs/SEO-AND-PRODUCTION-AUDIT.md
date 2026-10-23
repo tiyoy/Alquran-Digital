@@ -6,15 +6,15 @@
 - Open Graph/Twitter Card dengan aset `public/og-nurani.png` (1200×630).
 - Structured data JSON-LD bertipe `WebApplication` dan `inLanguage: id-ID`.
 - `src/app/robots.js` menghasilkan `/robots.txt`.
-- `src/app/sitemap.js` menghasilkan `/sitemap.xml` untuk URL kanonis utama.
+- `src/app/sitemap.js` menghasilkan `/sitemap.xml` untuk lima URL publik utama: `/`, `/quran`, `/jadwal-shalat`, `/doa`, dan `/asmaul-husna`.
 - `NEXT_PUBLIC_SITE_URL` dipakai untuk membuat URL absolut yang konsisten.
 - Deployment Preview di Vercel mengirim metadata `noindex` agar URL preview tidak bersaing dengan URL produksi di mesin pencari.
 - Header dasar: `X-Content-Type-Options`, `Referrer-Policy`, `X-Frame-Options`, dan `Permissions-Policy`.
-- Service worker dinaikkan ke `nurani-pwa-v9` supaya klien PWA memperbarui cache pada rilis ini.
+- Service worker dinaikkan ke `nurani-pwa-v11` dan memanaskan cache untuk empat route utama tambahan.
 
 ## Batasan yang diketahui
 
-1. Nurani saat ini merupakan single-page app: tab Al-Qur'an, Doa, Shalat, dan Asmaul Husna adalah state UI, bukan route URL tersendiri. Karena itu sitemap hanya memasukkan homepage. Untuk SEO per surah atau per doa, buat route server-rendered yang memiliki metadata unik terlebih dahulu.
+1. Empat bagian utama memiliki route URL dan metadata unik. Detail setiap surah/ayat atau setiap doa belum mempunyai URL tersendiri, sehingga belum muncul sebagai entri individual di sitemap.
 2. CSP belum diberlakukan sampai origin API, media audio, dan font terverifikasi; policy yang terlalu ketat dapat memutus fitur.
 3. SEO tidak menjamin indexing atau ranking. Search Console harus diverifikasi oleh pemilik situs.
 4. Lighthouse, build produksi, crawler sosial dan browser nyata tetap perlu dijalankan pada deployment setelah push.
@@ -39,3 +39,18 @@ Pastikan endpoint memberikan status 200, sitemap menggunakan domain kanonis yang
 4. Tunggu deployment sukses dan jalankan checklist di atas.
 5. Daftarkan situs pada Google Search Console dan submit sitemap.
 6. Tinjau laporan Search Console dan Lighthouse setelah data mulai terkumpul.
+
+
+## Pembaruan route SEO
+
+Empat bagian utama kini memiliki route yang dapat dibuka langsung dan metadata unik: `/quran`, `/jadwal-shalat`, `/doa`, dan `/asmaul-husna`. Sitemap kini memuat kelima URL publik utama termasuk `/`. Navigasi bawah tetap memakai perpindahan client-side dan menyediakan link `href` standar agar crawler dapat menemukan route. Detail per-surah belum dibuat sebagai URL indeks mandiri.
+
+
+## Route SEO utama
+
+- `/quran` — baca Al-Qur’an online dan terjemahan.
+- `/jadwal-shalat` — jadwal shalat Kabupaten Bogor dan Indonesia.
+- `/doa` — doa harian Arab, Latin, dan artinya.
+- `/asmaul-husna` — 99 Asmaul Husna dan artinya.
+
+Konfigurasi route bersama berada di `src/lib/section-routes.js` dan dipakai oleh metadata tiap halaman, update metadata saat navigasi client-side, serta sitemap. UI interaktif bersama berada di `src/components/NuraniApp.jsx`; setiap route App Router mengimpor komponen tersebut, bukan halaman route lain.

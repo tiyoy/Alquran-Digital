@@ -58,10 +58,15 @@ npm run start
 - [ ] Pastikan deployment Preview memakai metadata `noindex`, sedangkan deployment Production boleh diindeks.
 - [ ] Buka `/robots.txt` dan pastikan baris sitemap menunjuk ke domain yang benar.
 - [ ] Buka `/sitemap.xml` dan pastikan URL kanonis tidak memakai `localhost` atau deployment preview.
+- [ ] Buka `/quran`, `/jadwal-shalat`, `/doa`, dan `/asmaul-husna` secara langsung; masing-masing harus tampil pada tab yang sesuai.
+- [ ] Periksa setiap route memiliki title, meta description, canonical dan Open Graph URL yang sesuai.
+- [ ] Klik navigasi antarbagian, lalu uji tombol Back/Forward; URL, judul tab browser dan konten harus tetap sinkron.
+- [ ] Pastikan sitemap mencantumkan lima URL publik utama termasuk homepage, tanpa URL preview.
 - [ ] Buka HTML sumber halaman dan pastikan title, description, canonical, Open Graph, Twitter Card, dan JSON-LD muncul.
 - [ ] Pastikan `https://nurani-tiyoy.vercel.app/og-nurani.png` bisa dibuka dan ukurannya 1200×630.
 - [ ] Periksa response headers untuk `X-Content-Type-Options`, `Referrer-Policy`, `X-Frame-Options`, dan `Permissions-Policy`.
 - [ ] Jalankan Lighthouse pada build produksi, terutama SEO, Accessibility, Best Practices, dan Performance. Catat masalah dan perbaiki sebelum mengklaim skor tertentu.
+- [ ] Pastikan `/google47c4b90e54eddd18.html` menampilkan isi verifikasi Google tanpa login sebelum menekan Verify di Search Console.
 - [ ] Verifikasi domain di Google Search Console dan kirim `https://nurani-tiyoy.vercel.app/sitemap.xml`.
 - [ ] Uji kartu pratinjau tautan di aplikasi chat/media sosial. Crawler pihak ketiga dapat menyimpan pratinjau lama dalam cache.
 

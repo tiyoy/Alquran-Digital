@@ -167,7 +167,7 @@ Fondasi SEO teknis sudah disiapkan untuk halaman utama aplikasi:
 - Header keamanan dasar ditetapkan di `next.config.js`: `X-Content-Type-Options`, `Referrer-Policy`, `X-Frame-Options`, dan `Permissions-Policy`.
 - Halaman pemulihan tersedia untuk URL yang tidak ditemukan (`not-found.jsx`) dan error runtime pada segmen halaman (`error.jsx`).
 
-Saat ini Nurani menggunakan satu halaman utama dengan tab yang berubah sebagai state UI. Karena itu sitemap hanya mencantumkan URL kanonis `/`; query seperti `/?tab=quran` bukan halaman terpisah. Jika nanti surah, doa, atau tafsir dibuat sebagai route tersendiri, tambahkan metadata per route dan URL masing-masing ke sitemap.
+Halaman utama dan empat bagian utama kini memiliki URL tersendiri: `/quran`, `/jadwal-shalat`, `/doa`, dan `/asmaul-husna`. Setiap route memiliki title, deskripsi, canonical, dan metadata Open Graph/Twitter masing-masing. Navigasi bawah tetap mempertahankan pengalaman satu halaman saat digunakan, sekaligus menyediakan tautan `href` yang bisa diikuti crawler. Sitemap mencantumkan seluruh route publik utama; detail per-surah/ayat belum menjadi URL indeks tersendiri.
 
 Setelah deployment baru berhasil:
 
@@ -182,7 +182,7 @@ Setelah deployment baru berhasil:
 ## PWA dan mode offline
 
 - `public/manifest.webmanifest` mengatur nama aplikasi, ikon, warna tema, mode standalone, dan shortcut.
-- `public/sw.js` mengatur cache app shell, aset statis Next.js yang memakai nama ber-hash, serta respons GET yang berhasil dari beberapa endpoint API. Versi cache lama dibersihkan saat service worker baru aktif. Endpoint SEO (`/robots.txt`, `/sitemap.xml`, dan gambar Open Graph) melewati runtime cache service worker.
+- `public/sw.js` mengatur cache app shell, termasuk route publik `/quran`, `/jadwal-shalat`, `/doa`, dan `/asmaul-husna`, aset statis Next.js yang memakai nama ber-hash, serta respons GET yang berhasil dari beberapa endpoint API. Versi cache lama dibersihkan saat service worker baru aktif. Endpoint SEO (`/robots.txt`, `/sitemap.xml`, dan gambar Open Graph) melewati runtime cache service worker.
 - Preferensi membaca, bookmark, posisi baca, daftar ayat yang telah dibaca, target khatam, mode pengulangan audio, surah yang ditandai offline, sebagian metadata/ayat yang telah dimuat, doa, dan jadwal shalat terakhir juga dapat disimpan di browser.
 - **Offline bersifat progresif, bukan salinan penuh semua data.** Konten perlu berhasil dimuat saat online; dari halaman baca, gunakan **Simpan offline** untuk menandai surah dan menyimpan ayat di perangkat. Data tetap bergantung pada kapasitas penyimpanan browser dan bisa dihapus oleh pengguna/browser. Audio murottal masih dapat membutuhkan koneksi internet.
 - Instalasi PWA pada deployment publik membutuhkan HTTPS. `localhost` didukung untuk pengembangan.
@@ -214,7 +214,13 @@ alquran-digital-nextjs/
 │   ├── offline.html
 │   └── sw.js
 ├── src/
+│   ├── components/
+│   │   └── NuraniApp.jsx
 │   ├── app/
+│   │   ├── quran/page.jsx
+│   │   ├── jadwal-shalat/page.jsx
+│   │   ├── doa/page.jsx
+│   │   ├── asmaul-husna/page.jsx
 │   │   ├── globals.css
 │   │   ├── error.jsx
 │   │   ├── layout.jsx
@@ -223,6 +229,8 @@ alquran-digital-nextjs/
 │   │   ├── robots.js
 │   │   └── sitemap.js
 │   └── lib/
+│       ├── section-routes.js
+│       ├── section-metadata.js
 │       ├── api.js
 │       ├── data.js
 │       └── site-config.js
@@ -230,6 +238,14 @@ alquran-digital-nextjs/
 ├── package.json
 └── README.md
 ```
+
+## Verifikasi Google Search Console
+
+Proyek ini menyertakan file verifikasi HTML untuk properti URL-prefix `https://nurani-tiyoy.vercel.app/`. File `public/google47c4b90e54eddd18.html` harus dipertahankan dengan nama dan isi persis seperti yang diberikan Google. Setelah perubahan di-push dan deployment Vercel selesai, pastikan file dapat dibuka di:
+
+`https://nurani-tiyoy.vercel.app/google47c4b90e54eddd18.html`
+
+Kontennya adalah `google-site-verification: google47c4b90e54eddd18.html`. Jika URL dapat dibuka tanpa login dan menampilkan teks tersebut, kembali ke Google Search Console dan klik **Verify**. Jangan menghapus file setelah verifikasi karena Google dapat memeriksanya lagi. Metode file HTML hanya untuk properti URL-prefix; untuk properti Domain, gunakan verifikasi DNS TXT.
 
 ## Troubleshooting
 

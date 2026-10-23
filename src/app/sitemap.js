@@ -1,13 +1,10 @@
-import { canonicalUrl } from '@/lib/site-config';
+import { siteUrl } from '@/lib/site-config';
+import { SECTION_ROUTES } from '@/lib/section-routes';
 
-// The app currently uses a single canonical URL; query-string tabs are UI states,
-// not separate indexable pages. Add URL entries only when dedicated routes exist.
 export default function sitemap() {
-  return [
-    {
-      url: canonicalUrl,
-      changeFrequency: 'weekly',
-      priority: 1
-    }
-  ];
+  return SECTION_ROUTES.map(({ path, tab }) => ({
+    url: path === '/' ? `${siteUrl}/` : `${siteUrl}${path}`,
+    changeFrequency: tab === 'prayer' ? 'daily' : tab === 'asma' ? 'monthly' : 'weekly',
+    priority: tab === 'home' ? 1 : tab === 'quran' ? 0.9 : tab === 'asma' ? 0.7 : 0.8
+  }));
 }
