@@ -234,4 +234,4 @@ Saat ini repository belum menyertakan file `LICENSE`. Tentukan lisensi yang sesu
 
 ## Catatan perbaikan katalog doa
 
-Katalog doa menormalkan urutan berdasarkan ID numerik yang tersedia dan memastikan **Doa sebelum makan** berada sebelum **Doa sesudah makan**. Entri **Membaca basmalah sebelum makan** tetap terpisah dan tidak tertukar dengan redaksi doa sebelum makan. Service worker menggunakan cache versi baru agar pembaruan tidak tertahan cache lama.
+Katalog doa menormalkan urutan berdasarkan ID numerik yang tersedia dan memastikan **Doa sebelum makan** berada sebelum **Doa sesudah makan**. Entri khusus **Membaca basmalah sebelum makan** dikecualikan berdasarkan judul yang dinormalisasi secara tepat, tanpa menyaring doa lain yang memuat kata serupa. Katalog API atau cache yang hanya berisi satu/terlalu sedikit doa dianggap tidak lengkap dan tidak boleh menggantikan daftar yang tersedia. Service worker memakai versi cache terbaru.

@@ -8,7 +8,7 @@ import {
   MoreHorizontal, Pause, Play, Plus, RefreshCw, Search, Settings2, ShieldCheck,
   SlidersHorizontal, Sparkles, Sun, Wifi, WifiOff, X
 } from 'lucide-react';
-import { asmaulHusna, enforceBeforeMealDua, fallbackDuas, fallbackSurahs } from '@/lib/data';
+import { asmaulHusna, enforceBeforeMealDua, fallbackDuas, fallbackSurahs, MIN_DUA_CATALOG_SIZE } from '@/lib/data';
 import {
   chooseAudio, cleanArabicText, fetchAllPrayerCities, fetchDuas, fetchPrayerCity, fetchPrayerSchedule,
   fetchQuran, firstArray, normalizeSurah, normalizeVerse, unwrapPayload
@@ -290,13 +290,15 @@ export default function HomePage() {
     const savedSurahs = readLocal('aq:surahs', null);
     if (Array.isArray(savedSurahs) && savedSurahs.length) setSurahs(savedSurahs);
     const savedDuas = readLocal('aq:duas', null);
-    if (Array.isArray(savedDuas) && savedDuas.length) {
+    if (Array.isArray(savedDuas)) {
       const validSavedDuas = enforceBeforeMealDua(savedDuas.map(normalizeDua).filter(isUsableDua));
-      if (validSavedDuas.length) {
+      const fallbackRows = enforceBeforeMealDua(fallbackDuas.map(normalizeDua));
+      // A legacy cache containing only the before-meal prayer is incomplete. Replace it
+      // with the bundled list so it cannot make the page look as if every other dua was deleted.
+      if (validSavedDuas.length >= MIN_DUA_CATALOG_SIZE) {
         setDuas(validSavedDuas);
         writeLocal('aq:duas', validSavedDuas);
       } else {
-        const fallbackRows = enforceBeforeMealDua(fallbackDuas.map(normalizeDua));
         setDuas(fallbackRows);
         writeLocal('aq:duas', fallbackRows);
       }
@@ -352,9 +354,13 @@ export default function HomePage() {
     (async () => {
       try {
         const payload = await fetchDuas();
-        const rows = enforceBeforeMealDua(extractDuaRows(payload).map(normalizeDua).filter(isUsableDua));
-        // Never replace valid cached/bundled prayers with an empty or malformed API payload.
-        if (!cancelled && rows.length) {
+        const rawRows = extractDuaRows(payload).map(normalizeDua).filter(isUsableDua);
+        // Validate the API response BEFORE enforceBeforeMealDua, because that helper can
+        // add a canonical before-meal entry for non-empty lists that lack it. Otherwise an
+        // empty/malformed API payload could be mistakenly saved as a one-item catalogue.
+        if (rawRows.length < MIN_DUA_CATALOG_SIZE) return;
+        const rows = enforceBeforeMealDua(rawRows);
+        if (!cancelled && rows.length >= MIN_DUA_CATALOG_SIZE) {
           setDuas(rows);
           writeLocal('aq:duas', rows);
         }

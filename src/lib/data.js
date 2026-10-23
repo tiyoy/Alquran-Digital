@@ -27,22 +27,42 @@ export const fallbackDuas = [
   { id: 3, judul: 'Doa sebelum tidur', arab: 'بِاسْمِكَ اللَّهُمَّ أَمُوتُ وَأَحْيَا', latin: 'Bismika Allahumma amuutu wa ahyaa.', terjemah: 'Dengan nama-Mu, ya Allah, aku mati dan aku hidup.', sumber: 'HR. Bukhari' },
   { id: 4, judul: 'Doa bangun tidur', arab: 'الْحَمْدُ لِلَّهِ الَّذِي أَحْيَانَا بَعْدَ مَا أَمَاتَنَا وَإِلَيْهِ النُّشُورُ', latin: 'Alhamdulillaahil-ladzi ahyaanaa ba’da maa amaatanaa wa ilaihin-nusyuur.', terjemah: 'Segala puji bagi Allah yang menghidupkan kami setelah mematikan kami, dan kepada-Nya kami dibangkitkan.', sumber: 'HR. Bukhari' },
   { id: 5, judul: 'Doa memohon kebaikan', arab: 'رَبَّنَا آتِنَا فِي الدُّنْيَا حَسَنَةً وَفِي الْآخِرَةِ حَسَنَةً وَقِنَا عَذَابَ النَّارِ', latin: 'Rabbanaa aatinaa fid-dunyaa hasanah wa fil-aakhirati hasanah wa qinaa ‘adzaaban-naar.', terjemah: 'Ya Tuhan kami, berilah kami kebaikan di dunia dan kebaikan di akhirat, serta lindungilah kami dari azab neraka.', sumber: 'QS. Al-Baqarah: 201' },
-  {
-    id: 6,
-    judul: 'Membaca basmalah sebelum makan',
-    arab: 'بِسْمِ اللَّهِ',
-    latin: 'Bismillâh.',
-    terjemah: 'Dengan nama Allah.',
-    sumber: 'Tuntunan menyebut nama Allah sebelum makan; diriwayatkan dalam hadis sahih.'
-  },
 ];
 
-// Keep the well-known before-meal prayer accurate even if an API or older local cache
-// returns a different text for the same title. Bismillah is a separate item and must not
-// be mistaken for the longer supplication just because its title also says "sebelum makan".
+// A short API/cache response must never be treated as the complete dua catalogue.
+// EQuran's doa endpoint normally returns a list; the local fallback keeps the UI
+// useful while the full catalogue is unavailable.
+export const MIN_DUA_CATALOG_SIZE = Math.min(5, fallbackDuas.length);
+
+// Keep the canonical before-meal prayer accurate while removing only the dedicated
+// basmalah-before-meal card. Match its normalized title exactly so other prayers that
+// happen to contain the words "makan" or "basmalah" are preserved.
 export function enforceBeforeMealDua(duas) {
-  if (!Array.isArray(duas) || duas.length === 0) return Array.isArray(duas) ? duas : [];
-  const list = [...duas];
+  if (!Array.isArray(duas) || !duas.length) return [];
+
+  const excludedBasmalahTitles = new Set([
+    'membaca basmalah sebelum makan',
+    'membaca bismillah sebelum makan',
+    'bacaan basmalah sebelum makan',
+    'bacaan bismillah sebelum makan',
+    'basmalah sebelum makan',
+    'bismillah sebelum makan'
+  ]);
+  const normalizeTitle = (value) => String(value || '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const list = duas.filter((item) => {
+    const title = normalizeTitle(item?.judul ?? item?.title ?? item?.nama ?? item?.name);
+    return !excludedBasmalahTitles.has(title);
+  });
+
+  // Do not synthesize a single fallback card from an empty catalogue.
+  if (!list.length) return [];
+
   const pattern = /\b(sebelum|mau)\s+makan\b|\bdoa\s+makan\b|\bbefore\s+(eating|meal)\b/i;
   const index = list.findIndex((item) => {
     const title = `${item?.judul || ''} ${item?.title || ''}`;
@@ -55,13 +75,11 @@ export function enforceBeforeMealDua(duas) {
     list.push(canonical);
   }
 
-  // The UI numbers cards by array position. Sort numeric API/cache IDs to repair old saved
-  // lists where item ID 6 (basmalah) appeared between IDs 1 and 2.
+  // The UI numbers cards by array position. Sort numeric API/cache IDs to normalize ordering.
   const allHaveNumericIds = list.every((item) => item?.id !== null && item?.id !== undefined && String(item.id).trim() !== '' && Number.isFinite(Number(item.id)));
   if (allHaveNumericIds) list.sort((a, b) => Number(a.id) - Number(b.id));
 
-  // Keep the before-meal entry ahead of the after-meal entry even if the upstream API
-  // accidentally sends IDs 1 and 2 in the opposite content order.
+  // Keep the before-meal entry ahead of the after-meal entry even if upstream order is reversed.
   const beforeIndex = list.findIndex((item) => {
     const title = `${item?.judul || ''} ${item?.title || ''}`;
     return /\b(sebelum|mau)\s+makan\b|\bbefore\s+(eating|meal)\b/i.test(title) && !/\b(?:bismillah|basmalah)\b/i.test(title);
