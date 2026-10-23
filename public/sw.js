@@ -1,5 +1,5 @@
 /* Lightweight app-shell service worker for the Next.js App Router. */
-const SW_VERSION = 'nurani-pwa-v9';
+const SW_VERSION = 'nurani-pwa-v10';
 const APP_SHELL_CACHE = `${SW_VERSION}-shell`;
 const API_CACHE = `${SW_VERSION}-api`;
 const RUNTIME_CACHE = `${SW_VERSION}-runtime`;
@@ -52,7 +52,8 @@ self.addEventListener('fetch', (event) => {
     url.pathname.startsWith('/_next/') ||
     url.pathname === '/robots.txt' ||
     url.pathname === '/sitemap.xml' ||
-    url.pathname === '/og-nurani.png'
+    url.pathname === '/og-nurani.png' ||
+    url.pathname === '/google47c4b90e54eddd18.html'
   )) return;
 
   // The doa catalogue uses network-first so a malformed older API response is not
