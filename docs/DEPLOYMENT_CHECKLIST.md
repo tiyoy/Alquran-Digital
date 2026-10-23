@@ -59,9 +59,10 @@ npm run start
 - [ ] Buka `/robots.txt` dan pastikan baris sitemap menunjuk ke domain yang benar.
 - [ ] Buka `/sitemap.xml` dan pastikan URL kanonis tidak memakai `localhost` atau deployment preview.
 - [ ] Buka `/quran`, `/jadwal-shalat`, `/doa`, dan `/asmaul-husna` secara langsung; masing-masing harus tampil pada tab yang sesuai.
-- [ ] Periksa setiap route memiliki title, meta description, canonical dan Open Graph URL yang sesuai.
+- [ ] Buka `/quran/1-al-fatihah`, `/quran/2-al-baqarah`, dan `/quran/36-yasin` langsung dari tab baru; reader harus membuka surah yang sesuai.
+- [ ] Periksa setiap route bagian dan beberapa route surah memiliki title, meta description, canonical dan Open Graph URL yang sesuai.
 - [ ] Klik navigasi antarbagian, lalu uji tombol Back/Forward; URL, judul tab browser dan konten harus tetap sinkron.
-- [ ] Pastikan sitemap mencantumkan lima URL publik utama termasuk homepage, tanpa URL preview.
+- [ ] Pastikan sitemap mencantumkan lima URL bagian utama plus 114 URL surah individual (119 URL total), tanpa URL preview.
 - [ ] Buka HTML sumber halaman dan pastikan title, description, canonical, Open Graph, Twitter Card, dan JSON-LD muncul.
 - [ ] Pastikan `https://nurani-tiyoy.vercel.app/og-nurani.png` bisa dibuka dan ukurannya 1200×630.
 - [ ] Periksa response headers untuk `X-Content-Type-Options`, `Referrer-Policy`, `X-Frame-Options`, dan `Permissions-Policy`.
@@ -99,3 +100,13 @@ Pastikan `.env.local` atau secret pribadi tidak ikut di-commit. Endpoint `NEXT_P
 - [Panduan upgrade Next.js 15](https://nextjs.org/docs/app/guides/upgrading/version-15)
 - [Next.js Security Advisories](https://github.com/vercel/next.js/security/advisories)
 - [Deployment Next.js di Vercel](https://vercel.com/docs/frameworks/full-stack/nextjs)
+
+
+## Halaman surah individual
+- [ ] Buka `/quran/1-al-fatihah` langsung dari tab baru dan pastikan pembaca Al-Qur'an membuka Surah Al-Fatihah.
+- [ ] Refresh route detail dan pastikan tidak 404.
+- [ ] Dari daftar surah, klik beberapa item dan pastikan URL berubah menjadi `/quran/<nomor>-<slug>`.
+- [ ] Uji Back/Forward browser untuk berpindah antara daftar dan detail surah.
+- [ ] Periksa title, description, canonical, dan Open Graph pada HTML untuk setidaknya tiga surah berbeda.
+- [ ] Pastikan sitemap mencakup 114 URL surah ditambah lima halaman utama (119 total).
+- [ ] Setelah membuka satu surah secara online, uji URL yang sama ketika offline.

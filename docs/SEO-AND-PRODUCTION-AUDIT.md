@@ -6,15 +6,15 @@
 - Open Graph/Twitter Card dengan aset `public/og-nurani.png` (1200×630).
 - Structured data JSON-LD bertipe `WebApplication` dan `inLanguage: id-ID`.
 - `src/app/robots.js` menghasilkan `/robots.txt`.
-- `src/app/sitemap.js` menghasilkan `/sitemap.xml` untuk lima URL publik utama: `/`, `/quran`, `/jadwal-shalat`, `/doa`, dan `/asmaul-husna`.
+- `src/app/sitemap.js` menghasilkan `/sitemap.xml` untuk lima URL bagian utama dan 114 halaman surah individual (total 119 URL).
 - `NEXT_PUBLIC_SITE_URL` dipakai untuk membuat URL absolut yang konsisten.
 - Deployment Preview di Vercel mengirim metadata `noindex` agar URL preview tidak bersaing dengan URL produksi di mesin pencari.
 - Header dasar: `X-Content-Type-Options`, `Referrer-Policy`, `X-Frame-Options`, dan `Permissions-Policy`.
-- Service worker dinaikkan ke `nurani-pwa-v11` dan memanaskan cache untuk empat route utama tambahan.
+- Service worker memakai cache versi `nurani-pwa-v12`, memanaskan cache untuk bagian utama dan Surah Al-Fatihah, serta menyimpan dokumen navigasi pada URL persis yang dikunjungi.
 
 ## Batasan yang diketahui
 
-1. Empat bagian utama memiliki route URL dan metadata unik. Detail setiap surah/ayat atau setiap doa belum mempunyai URL tersendiri, sehingga belum muncul sebagai entri individual di sitemap.
+1. Lima route bagian utama dan 114 route surah memiliki URL sendiri. Ayat dan doa individual belum mempunyai URL tersendiri.
 2. CSP belum diberlakukan sampai origin API, media audio, dan font terverifikasi; policy yang terlalu ketat dapat memutus fitur.
 3. SEO tidak menjamin indexing atau ranking. Search Console harus diverifikasi oleh pemilik situs.
 4. Lighthouse, build produksi, crawler sosial dan browser nyata tetap perlu dijalankan pada deployment setelah push.
@@ -24,6 +24,7 @@
 ```bash
 # Browser atau terminal yang mendukung curl
 curl -I https://nurani-tiyoy.vercel.app/
+curl -I https://nurani-tiyoy.vercel.app/quran/1-al-fatihah
 curl -I https://nurani-tiyoy.vercel.app/robots.txt
 curl -I https://nurani-tiyoy.vercel.app/sitemap.xml
 curl -I https://nurani-tiyoy.vercel.app/og-nurani.png
@@ -43,7 +44,7 @@ Pastikan endpoint memberikan status 200, sitemap menggunakan domain kanonis yang
 
 ## Pembaruan route SEO
 
-Empat bagian utama kini memiliki route yang dapat dibuka langsung dan metadata unik: `/quran`, `/jadwal-shalat`, `/doa`, dan `/asmaul-husna`. Sitemap kini memuat kelima URL publik utama termasuk `/`. Navigasi bawah tetap memakai perpindahan client-side dan menyediakan link `href` standar agar crawler dapat menemukan route. Detail per-surah belum dibuat sebagai URL indeks mandiri.
+Empat bagian tambahan `/quran`, `/jadwal-shalat`, `/doa`, dan `/asmaul-husna` beserta homepage dapat dibuka langsung dan memiliki metadata unik. Setiap surah juga mempunyai URL mandiri `/quran/<nomor>-<slug>`, dibuat secara statis dan ditambahkan ke sitemap. Navigasi bawah tetap memakai perpindahan client-side dan menyediakan link `href` standar.
 
 
 ## Route SEO utama
@@ -54,3 +55,12 @@ Empat bagian utama kini memiliki route yang dapat dibuka langsung dan metadata u
 - `/asmaul-husna` — 99 Asmaul Husna dan artinya.
 
 Konfigurasi route bersama berada di `src/lib/section-routes.js` dan dipakai oleh metadata tiap halaman, update metadata saat navigasi client-side, serta sitemap. UI interaktif bersama berada di `src/components/NuraniApp.jsx`; setiap route App Router mengimpor komponen tersebut, bukan halaman route lain.
+
+
+## SEO surah individual
+- Setiap surah memakai route statis `/quran/<nomor>-<slug>`.
+- Sitemap menyertakan seluruh 114 route surah dan lima route bagian utama.
+- Daftar surah memakai anchor HTML dengan URL kanonis agar dapat dijelajahi crawler.
+- Metadata per surah menyediakan title, description, canonical, Open Graph, dan Twitter Card.
+- Service worker v12 menyimpan navigasi pada URL aktual yang dikunjungi; cache homepage tidak lagi tertimpa oleh response halaman lain.
+- Build produksi dan pengujian browser masih perlu dijalankan setelah dependency berhasil dipasang.

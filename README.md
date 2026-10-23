@@ -15,7 +15,7 @@
   <img alt="Tailwind CSS" src="https://img.shields.io/badge/Tailwind_CSS-v3-06B6D4?logo=tailwindcss&logoColor=white" />
   <img alt="PWA" src="https://img.shields.io/badge/PWA-Installable-5A0FC8?logo=pwa&logoColor=white" />
   <img alt="Bahasa Indonesia" src="https://img.shields.io/badge/Bahasa-Indonesia-059669" />
-  <img alt="Versi aplikasi 1.2.0" src="https://img.shields.io/badge/Versi-1.2.0-059669" />
+  <img alt="Versi aplikasi 1.4.0" src="https://img.shields.io/badge/Versi-1.4.0-059669" />
 </p>
 
 <p align="center">
@@ -33,6 +33,16 @@
 **Nurani** dirancang untuk membantu aktivitas tilawah harian melalui satu antarmuka yang nyaman digunakan di ponsel maupun desktop. Navigasi bawah ramah satu tangan, pengaturan bacaan, mode terang/gelap, serta penyimpanan lokal membuat pengalaman membaca terasa praktis tanpa mengharuskan pengguna membuat akun.
 
 > Fokus produk: **Tilawah · Tadabbur · Doa**
+
+## URL surah individual dan SEO
+
+Setiap surah memiliki halaman statis dengan URL yang mudah dibagikan, misalnya:
+
+- `https://nurani-tiyoy.vercel.app/quran/1-al-fatihah`
+- `https://nurani-tiyoy.vercel.app/quran/2-al-baqarah`
+- `https://nurani-tiyoy.vercel.app/quran/36-yasin`
+
+Next.js membangun 114 route dari metadata surah lokal. Setiap route menyediakan title, deskripsi, canonical URL, Open Graph, dan Twitter Card khusus. Daftar surah menampilkan anchor HTML yang bisa diikuti crawler, sedangkan klik normal tetap membuka pembaca di dalam aplikasi tanpa reload.
 
 ## Fitur utama
 
@@ -167,7 +177,7 @@ Fondasi SEO teknis sudah disiapkan untuk halaman utama aplikasi:
 - Header keamanan dasar ditetapkan di `next.config.js`: `X-Content-Type-Options`, `Referrer-Policy`, `X-Frame-Options`, dan `Permissions-Policy`.
 - Halaman pemulihan tersedia untuk URL yang tidak ditemukan (`not-found.jsx`) dan error runtime pada segmen halaman (`error.jsx`).
 
-Halaman utama dan empat bagian utama kini memiliki URL tersendiri: `/quran`, `/jadwal-shalat`, `/doa`, dan `/asmaul-husna`. Setiap route memiliki title, deskripsi, canonical, dan metadata Open Graph/Twitter masing-masing. Navigasi bawah tetap mempertahankan pengalaman satu halaman saat digunakan, sekaligus menyediakan tautan `href` yang bisa diikuti crawler. Sitemap mencantumkan seluruh route publik utama; detail per-surah/ayat belum menjadi URL indeks tersendiri.
+Halaman utama dan empat bagian utama memiliki URL tersendiri, dan seluruh 114 surah kini memiliki route statis `/quran/<nomor>-<slug>`. Setiap route surah memiliki title, deskripsi, canonical, Open Graph, dan Twitter Card masing-masing. Navigasi bawah tetap mempertahankan pengalaman mobile satu halaman; daftar surah menyediakan tautan HTML yang bisa diikuti crawler. Sitemap mencantumkan 119 URL: lima route utama dan 114 route surah. Ayat dan doa individual belum memiliki URL tersendiri.
 
 Setelah deployment baru berhasil:
 

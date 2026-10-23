@@ -1,9 +1,9 @@
 /* Lightweight app-shell service worker for the Next.js App Router. */
-const SW_VERSION = 'nurani-pwa-v11';
+const SW_VERSION = 'nurani-pwa-v12';
 const APP_SHELL_CACHE = `${SW_VERSION}-shell`;
 const API_CACHE = `${SW_VERSION}-api`;
 const RUNTIME_CACHE = `${SW_VERSION}-runtime`;
-const APP_SHELL_URLS = ['/', '/quran', '/jadwal-shalat', '/doa', '/asmaul-husna', '/offline.html', '/manifest.webmanifest', '/favicon.svg'];
+const APP_SHELL_URLS = ['/', '/quran', '/quran/1-al-fatihah', '/jadwal-shalat', '/doa', '/asmaul-husna', '/offline.html', '/manifest.webmanifest', '/favicon.svg'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
@@ -81,13 +81,15 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Keep local app assets warm; navigation falls back to the saved app shell.
+  // Cache successful document navigations under their exact URL. This makes
+  // previously visited surah detail routes available offline without overwriting
+  // the cached homepage with whichever page happened to be opened last.
   if (url.origin === self.location.origin && request.mode === 'navigate') {
     event.respondWith((async () => {
       const cache = await caches.open(APP_SHELL_CACHE);
       try {
         const response = await fetch(request);
-        if (response && response.ok) cache.put(new URL('/', self.location.origin).toString(), response.clone()).catch(() => {});
+        if (response && response.ok) cache.put(request, response.clone()).catch(() => {});
         return response;
       } catch {
         return (await cache.match(request)) || (await cache.match(new URL('/', self.location.origin).toString())) || (await cache.match(new URL('/offline.html', self.location.origin).toString())) || Response.error();

@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { asmaulHusna, enforceBeforeMealDua, fallbackDuas, fallbackSurahs, MIN_DUA_CATALOG_SIZE } from '@/lib/data';
 import { PATH_TABS, SECTION_SEO_BY_TAB, TAB_PATHS, VALID_TABS } from '@/lib/section-routes';
+import { getSurahNumberFromPathname, getSurahPath } from '@/lib/surah-routes';
 import { siteName, siteUrl } from '@/lib/site-config';
 import {
   chooseAudio, cleanArabicText, fetchAllPrayerCities, fetchDuas, fetchPrayerCity, fetchPrayerSchedule,
@@ -215,8 +216,13 @@ function findTafsirText(payload, verseNumber) {
   return typeof direct === 'string' ? direct : '';
 }
 
-export default function HomePage({ initialTab = 'home' }) {
+export default function HomePage({ initialTab = 'home', initialSurahNumber = null }) {
   const safeInitialTab = VALID_TABS.includes(initialTab) ? initialTab : 'home';
+  const parsedInitialSurahNumber = Number(initialSurahNumber);
+  const safeInitialSurahNumber = Number.isInteger(parsedInitialSurahNumber) && parsedInitialSurahNumber >= 1 && parsedInitialSurahNumber <= 114
+    ? parsedInitialSurahNumber
+    : null;
+  const initialSurahMetadata = safeInitialSurahNumber ? fallbackSurahs[safeInitialSurahNumber - 1] : null;
   const [activeTab, setActiveTab] = useState(safeInitialTab);
   const [theme, setTheme] = useState('light');
   const [dateLabel, setDateLabel] = useState('');
@@ -230,9 +236,9 @@ export default function HomePage({ initialTab = 'home' }) {
   const [surahLoading, setSurahLoading] = useState(true);
   const [surahQuery, setSurahQuery] = useState('');
   const [surahFilter, setSurahFilter] = useState('all');
-  const [selectedSurah, setSelectedSurah] = useState(null);
+  const [selectedSurah, setSelectedSurah] = useState(initialSurahMetadata);
   const [verses, setVerses] = useState([]);
-  const [verseLoading, setVerseLoading] = useState(false);
+  const [verseLoading, setVerseLoading] = useState(Boolean(initialSurahMetadata));
   const [verseQuery, setVerseQuery] = useState('');
   const [arabicVisible, setArabicVisible] = useState(true);
   const [latinVisible, setLatinVisible] = useState(true);
@@ -258,6 +264,7 @@ export default function HomePage({ initialTab = 'home' }) {
   const [audioRepeat, setAudioRepeat] = useState('off');
   const audioRef = useRef(null);
   const routeSyncInitializedRef = useRef(false);
+  const initialSurahOpenedRef = useRef(null);
   const repeatCountRef = useRef(0);
   const pendingJumpRef = useRef(null);
 
@@ -309,7 +316,8 @@ export default function HomePage({ initialTab = 'home' }) {
 
   useEffect(() => {
     setDateLabel(formatToday());
-    const tabFromPath = PATH_TABS[normalizePathname(window.location.pathname)];
+    const initialPathname = normalizePathname(window.location.pathname);
+    const tabFromPath = PATH_TABS[initialPathname] || (getSurahNumberFromPathname(initialPathname) ? 'quran' : null);
     if (tabFromPath) setActiveTab(tabFromPath);
     const tabFromUrl = new URLSearchParams(window.location.search).get('tab');
     if (VALID_TABS.includes(tabFromUrl)) setActiveTab(tabFromUrl);
@@ -396,36 +404,31 @@ export default function HomePage({ initialTab = 'home' }) {
   useEffect(() => {
     const queryTab = new URLSearchParams(window.location.search).get('tab');
     const currentPath = normalizePathname(window.location.pathname);
-    const targetPath = TAB_PATHS[activeTab] || '/';
+    const targetPath = activeTab === 'quran' && selectedSurah
+      ? getSurahPath(selectedSurah)
+      : (TAB_PATHS[activeTab] || '/');
 
-    // On first mount, let the boot effect align state with a direct route (including
-    // a cached route fallback) before changing the URL. This avoids an unnecessary
-    // root -> section -> root history loop during offline recovery.
+    // On first mount, let the boot effect align state with a direct route before
+    // changing the URL. Detail routes are valid Quran pages, not unknown paths.
     if (!routeSyncInitializedRef.current) {
       routeSyncInitializedRef.current = true;
-      const pathTab = PATH_TABS[currentPath];
+      const pathTab = PATH_TABS[currentPath] || (getSurahNumberFromPathname(currentPath) ? 'quran' : null);
       if ((pathTab && pathTab !== activeTab) || (currentPath === '/' && VALID_TABS.includes(queryTab) && activeTab !== queryTab)) return;
     }
     if (currentPath !== targetPath || VALID_TABS.includes(queryTab)) {
       window.history.pushState(null, '', targetPath);
     }
-  }, [activeTab]);
-
-  useEffect(() => {
-    const syncTabFromHistory = () => {
-      const pathname = normalizePathname(window.location.pathname);
-      const tab = PATH_TABS[pathname];
-      if (!tab) return;
-      setActiveTab(tab);
-      if (tab !== 'quran') setSelectedSurah(null);
-    };
-    window.addEventListener('popstate', syncTabFromHistory);
-    return () => window.removeEventListener('popstate', syncTabFromHistory);
-  }, []);
+  }, [activeTab, selectedSurah?.nomor]);
 
   // Keep browser tab title, descriptions and canonical metadata aligned while navigating client-side.
   useEffect(() => {
-    const seo = SECTION_SEO_BY_TAB[activeTab] || SECTION_SEO_BY_TAB.home;
+    const seo = activeTab === 'quran' && selectedSurah
+      ? {
+          title: `Surah ${selectedSurah.namaLatin} (${selectedSurah.arti || 'Al-Qur’an'}) — Baca Al-Qur’an Online`,
+          description: `Baca Surah ${selectedSurah.namaLatin}, surah ke-${selectedSurah.nomor} dalam Al-Qur’an, dengan ${selectedSurah.jumlahAyat || 'ayat'} ayat, teks Arab, transliterasi Latin, terjemahan Indonesia, audio murottal, dan bookmark.`,
+          path: getSurahPath(selectedSurah)
+        }
+      : (SECTION_SEO_BY_TAB[activeTab] || SECTION_SEO_BY_TAB.home);
     const fullTitle = activeTab === 'home' ? siteName : `${seo.title} | Nurani`;
     document.title = fullTitle;
 
@@ -452,7 +455,7 @@ export default function HomePage({ initialTab = 'home' }) {
       document.head.appendChild(canonical);
     }
     canonical.setAttribute('href', `${siteUrl}${seo.path === '/' ? '/' : seo.path}`);
-  }, [activeTab]);
+  }, [activeTab, selectedSurah?.nomor]);
 
   useEffect(() => {
     let cancelled = false;
@@ -641,6 +644,34 @@ export default function HomePage({ initialTab = 'home' }) {
       setVerseLoading(false);
     }
   }, [surahs, showToast, markVerseRead]);
+
+  // Open a surah when a reader URL is loaded directly or refreshed. The ref avoids
+  // re-fetching it when the catalogue metadata updates after the first render.
+  useEffect(() => {
+    if (!safeInitialSurahNumber || initialSurahOpenedRef.current === safeInitialSurahNumber) return;
+    initialSurahOpenedRef.current = safeInitialSurahNumber;
+    const initialSurah = surahs.find((item) => Number(item.nomor) === safeInitialSurahNumber)
+      || fallbackSurahs[safeInitialSurahNumber - 1];
+    if (initialSurah) void openSurah(initialSurah, 1);
+  }, [safeInitialSurahNumber, surahs, openSurah]);
+
+  useEffect(() => {
+    const syncTabFromHistory = () => {
+      const pathname = normalizePathname(window.location.pathname);
+      const surahNumber = getSurahNumberFromPathname(pathname);
+      if (surahNumber) {
+        setActiveTab('quran');
+        if (Number(selectedSurah?.nomor) !== surahNumber) void openSurah(surahNumber, 1);
+        return;
+      }
+      const tab = PATH_TABS[pathname];
+      if (!tab) return;
+      setActiveTab(tab);
+      if (tab !== 'quran' || pathname === TAB_PATHS.quran) setSelectedSurah(null);
+    };
+    window.addEventListener('popstate', syncTabFromHistory);
+    return () => window.removeEventListener('popstate', syncTabFromHistory);
+  }, [openSurah, selectedSurah?.nomor]);
 
   useEffect(() => {
     if (!selectedSurah || !verses.length || typeof IntersectionObserver === 'undefined') return undefined;
@@ -929,11 +960,11 @@ export default function HomePage({ initialTab = 'home' }) {
       <div className="results-caption"><span>{surahLoading ? 'Memperbarui daftar…' : `${filteredSurahs.length} surah ditemukan`}</span><span><ListFilter size={14} /> Urut sesuai mushaf</span></div>
       <div className="surah-grid">
         {filteredSurahs.map((surah) => <article className="surah-card card-surface" key={surah.nomor}>
-          <button className="surah-main" onClick={() => openSurah(surah, 1)} aria-label={`Baca ${surah.namaLatin}`}>
+          <a className="surah-main" href={getSurahPath(surah)} onClick={(event) => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return; event.preventDefault(); void openSurah(surah, 1); }} aria-label={`Baca ${surah.namaLatin}`}>
             <span className="surah-number"><span>{surah.nomor}</span></span>
             <span className="surah-copy"><strong>{surah.namaLatin}</strong><span>{surah.arti || 'Al-Qur’an'} · {surah.jumlahAyat || '—'} ayat</span><small>{String(surah.tempatTurun || 'Al-Qur’an').replace('Mekah','Makkiyah').replace('Madinah','Madaniyah')}</small></span>
             <span className="surah-arabic" dir="rtl">{surah.nama || ''}</span>
-          </button>
+          </a>
           <button className={`surah-bookmark ${bookmarkedSurahs.includes(Number(surah.nomor)) ? 'saved' : ''}`} aria-label={bookmarkedSurahs.includes(Number(surah.nomor)) ? 'Hapus bookmark surah' : 'Simpan bookmark surah'} onClick={() => toggleSurahBookmark(Number(surah.nomor))}><Bookmark size={16} fill={bookmarkedSurahs.includes(Number(surah.nomor)) ? 'currentColor' : 'none'} /></button>
         </article>)}
       </div>
