@@ -15,6 +15,7 @@
   <img alt="Tailwind CSS" src="https://img.shields.io/badge/Tailwind_CSS-v3-06B6D4?logo=tailwindcss&logoColor=white" />
   <img alt="PWA" src="https://img.shields.io/badge/PWA-Installable-5A0FC8?logo=pwa&logoColor=white" />
   <img alt="Bahasa Indonesia" src="https://img.shields.io/badge/Bahasa-Indonesia-059669" />
+  <img alt="Versi aplikasi 1.2.0" src="https://img.shields.io/badge/Versi-1.2.0-059669" />
 </p>
 
 <p align="center">
@@ -105,9 +106,10 @@ Aplikasi memiliki endpoint default sehingga `.env.local` tidak wajib untuk menja
 NEXT_PUBLIC_QURAN_API=https://equran.id/api/v2
 NEXT_PUBLIC_DOA_API=https://equran.id/api/doa
 NEXT_PUBLIC_SHOLAT_API=https://api.myquran.com/v3/sholat
+NEXT_PUBLIC_SITE_URL=https://nurani-tiyoy.vercel.app
 ```
 
-Semua variabel di atas adalah **endpoint publik**, bukan tempat menyimpan secret. Variabel dengan awalan `NEXT_PUBLIC_` dapat dimasukkan ke bundle browser. Jangan menyimpan token rahasia, password, atau private API key di dalamnya. Jika nilainya diubah di Vercel, jalankan deployment ulang agar build menggunakan konfigurasi terbaru.
+Semua variabel di atas adalah **konfigurasi publik**, bukan tempat menyimpan secret. Variabel dengan awalan `NEXT_PUBLIC_` dapat dimasukkan ke bundle browser. Jangan menyimpan token rahasia, password, atau private API key di dalamnya. `NEXT_PUBLIC_SITE_URL` dipakai untuk canonical URL, sitemap, robots, dan pratinjau tautan; pertahankan `https://nurani-tiyoy.vercel.app` atau ganti dengan domain resmi jika nanti memakai domain khusus. Jika nilainya diubah di Vercel, jalankan deployment ulang agar build menggunakan konfigurasi terbaru.
 
 ## Publikasikan ke GitHub
 
@@ -136,7 +138,7 @@ Cara termudah adalah menghubungkan repository GitHub ke Vercel. Integrasi Git da
    - **Framework Preset:** Next.js
    - **Build Command:** `npm run build`
    - **Output Directory:** biarkan default/dideteksi otomatis
-5. Bila tidak menggunakan endpoint override, environment variables tidak perlu ditambahkan. Bila ingin menggantinya, tambahkan `NEXT_PUBLIC_QURAN_API`, `NEXT_PUBLIC_DOA_API`, dan/atau `NEXT_PUBLIC_SHOLAT_API` di **Project Settings → Environment Variables** untuk lingkungan yang sesuai.
+5. Tambahkan `NEXT_PUBLIC_SITE_URL=https://nurani-tiyoy.vercel.app` di **Project Settings → Environment Variables** untuk Production (dan Preview bila perlu). Jika kelak menggunakan domain khusus, ubah nilainya ke domain kanonis tersebut. Endpoint publik tidak memerlukan key; tambahkan `NEXT_PUBLIC_QURAN_API`, `NEXT_PUBLIC_DOA_API`, dan/atau `NEXT_PUBLIC_SHOLAT_API` hanya jika ingin mengganti endpoint default.
 6. Klik **Deploy** dan periksa URL deployment. Setiap push berikutnya dapat memicu deployment otomatis sesuai konfigurasi branch.
 
 Panduan resmi: [Deploy Git Repository di Vercel](https://vercel.com/docs/git) · [Next.js di Vercel](https://vercel.com/docs/frameworks/full-stack/nextjs) · [Environment Variables Vercel](https://vercel.com/docs/environment-variables).
@@ -152,10 +154,35 @@ Panduan resmi: [Deploy Git Repository di Vercel](https://vercel.com/docs/git) ·
 - [Next.js Security Advisories](https://github.com/vercel/next.js/security/advisories)
 - [Panduan resmi upgrade Next.js 15](https://nextjs.org/docs/app/guides/upgrading/version-15)
 
+## SEO dan pratinjau tautan
+
+Detail audit dan pemeriksaan paska-deploy tersedia di [`docs/SEO-AND-PRODUCTION-AUDIT.md`](./docs/SEO-AND-PRODUCTION-AUDIT.md).
+
+Fondasi SEO teknis sudah disiapkan untuk halaman utama aplikasi:
+
+- Metadata bahasa Indonesia: title, description, keywords, canonical URL, dan instruksi indexing untuk crawler. Deployment Preview Vercel diberi `noindex`; URL produksi tetap dapat diindeks.
+- Open Graph dan Twitter Card memakai gambar pratinjau 1200×630 di `public/og-nurani.png`.
+- Structured data `WebApplication` berbahasa Indonesia agar mesin pencari dapat memahami jenis dan fitur aplikasi.
+- `src/app/robots.js` menghasilkan `/robots.txt`, sementara `src/app/sitemap.js` menghasilkan `/sitemap.xml`.
+- Header keamanan dasar ditetapkan di `next.config.js`: `X-Content-Type-Options`, `Referrer-Policy`, `X-Frame-Options`, dan `Permissions-Policy`.
+- Halaman pemulihan tersedia untuk URL yang tidak ditemukan (`not-found.jsx`) dan error runtime pada segmen halaman (`error.jsx`).
+
+Saat ini Nurani menggunakan satu halaman utama dengan tab yang berubah sebagai state UI. Karena itu sitemap hanya mencantumkan URL kanonis `/`; query seperti `/?tab=quran` bukan halaman terpisah. Jika nanti surah, doa, atau tafsir dibuat sebagai route tersendiri, tambahkan metadata per route dan URL masing-masing ke sitemap.
+
+Setelah deployment baru berhasil:
+
+1. Buka `https://nurani-tiyoy.vercel.app/robots.txt` dan pastikan sitemap ditautkan.
+2. Buka `https://nurani-tiyoy.vercel.app/sitemap.xml` dan pastikan URL kanonis benar.
+3. Bagikan URL di pemeriksa pratinjau Open Graph atau kirim ke aplikasi chat untuk memeriksa kartu gambar.
+4. Daftarkan properti situs di [Google Search Console](https://search.google.com/search-console/about), verifikasi kepemilikan, lalu kirim sitemap URL. Indexing tidak instan dan tidak dijamin.
+5. Jalankan Lighthouse pada deployment produksi untuk melihat skor Performance, Accessibility, Best Practices, dan SEO.
+
+**Batas audit saat ini:** Content-Security-Policy (CSP) belum dipasang karena domain API dan host audio perlu diinventarisasi dari Network/Console browser dan diuji agar tidak memutus fungsi inti. Header CSP yang terlalu ketat bisa memblokir murottal atau data API. Tambahkan setelah daftar sumber `connect-src`, `media-src`, `font-src`, dan `img-src` sudah terverifikasi.
+
 ## PWA dan mode offline
 
 - `public/manifest.webmanifest` mengatur nama aplikasi, ikon, warna tema, mode standalone, dan shortcut.
-- `public/sw.js` mengatur cache app shell, aset statis Next.js yang memakai nama ber-hash, serta respons GET yang berhasil dari beberapa endpoint API. Versi cache lama dibersihkan saat service worker baru aktif.
+- `public/sw.js` mengatur cache app shell, aset statis Next.js yang memakai nama ber-hash, serta respons GET yang berhasil dari beberapa endpoint API. Versi cache lama dibersihkan saat service worker baru aktif. Endpoint SEO (`/robots.txt`, `/sitemap.xml`, dan gambar Open Graph) melewati runtime cache service worker.
 - Preferensi membaca, bookmark, posisi baca, daftar ayat yang telah dibaca, target khatam, mode pengulangan audio, surah yang ditandai offline, sebagian metadata/ayat yang telah dimuat, doa, dan jadwal shalat terakhir juga dapat disimpan di browser.
 - **Offline bersifat progresif, bukan salinan penuh semua data.** Konten perlu berhasil dimuat saat online; dari halaman baca, gunakan **Simpan offline** untuk menandai surah dan menyimpan ayat di perangkat. Data tetap bergantung pada kapasitas penyimpanan browser dan bisa dihapus oleh pengguna/browser. Audio murottal masih dapat membutuhkan koneksi internet.
 - Instalasi PWA pada deployment publik membutuhkan HTTPS. `localhost` didukung untuk pengembangan.
@@ -176,9 +203,12 @@ alquran-digital-nextjs/
 │   ├── MASTER.md
 │   └── UI_UX_AUDIT.md
 ├── docs/
+│   ├── DEPLOYMENT_CHECKLIST.md
+│   ├── SEO-AND-PRODUCTION-AUDIT.md
 │   └── PRD.md
 ├── public/
 │   ├── icons/
+│   ├── og-nurani.png
 │   ├── favicon.svg
 │   ├── manifest.webmanifest
 │   ├── offline.html
@@ -186,11 +216,16 @@ alquran-digital-nextjs/
 ├── src/
 │   ├── app/
 │   │   ├── globals.css
+│   │   ├── error.jsx
 │   │   ├── layout.jsx
-│   │   └── page.jsx
+│   │   ├── not-found.jsx
+│   │   ├── page.jsx
+│   │   ├── robots.js
+│   │   └── sitemap.js
 │   └── lib/
 │       ├── api.js
-│       └── data.js
+│       ├── data.js
+│       └── site-config.js
 ├── .env.example
 ├── package.json
 └── README.md

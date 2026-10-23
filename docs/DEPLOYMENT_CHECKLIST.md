@@ -37,6 +37,8 @@ npm run start
 ## 3. Smoke test fitur
 
 - [ ] Beranda, navigasi bawah, mode terang, dan mode gelap tampil tanpa error.
+- [ ] URL tidak dikenal menampilkan halaman 404 Nurani, bukan halaman error bawaan yang membingungkan.
+- [ ] Error runtime menampilkan tombol Coba lagi yang memanggil reset boundary.
 - [ ] Dropdown pilihan qari terbaca pada mode gelap.
 - [ ] Daftar surah, pencarian, teks Arab, latin, terjemahan, bookmark, dan loncat ayat berjalan.
 - [ ] Target khatam 30/60/90 hari tersimpan setelah refresh.
@@ -50,7 +52,22 @@ npm run start
 
 > Catatan offline: aplikasi menyimpan data yang telah dimuat atau ditandai. Audio dari sumber eksternal dan konten yang belum pernah dibuka mungkin tetap membutuhkan internet.
 
-## 4. Push ke GitHub
+## 4. SEO dan header keamanan
+
+- [ ] Pastikan `NEXT_PUBLIC_SITE_URL` bernilai `https://nurani-tiyoy.vercel.app` (atau domain kanonis yang sudah diverifikasi).
+- [ ] Pastikan deployment Preview memakai metadata `noindex`, sedangkan deployment Production boleh diindeks.
+- [ ] Buka `/robots.txt` dan pastikan baris sitemap menunjuk ke domain yang benar.
+- [ ] Buka `/sitemap.xml` dan pastikan URL kanonis tidak memakai `localhost` atau deployment preview.
+- [ ] Buka HTML sumber halaman dan pastikan title, description, canonical, Open Graph, Twitter Card, dan JSON-LD muncul.
+- [ ] Pastikan `https://nurani-tiyoy.vercel.app/og-nurani.png` bisa dibuka dan ukurannya 1200×630.
+- [ ] Periksa response headers untuk `X-Content-Type-Options`, `Referrer-Policy`, `X-Frame-Options`, dan `Permissions-Policy`.
+- [ ] Jalankan Lighthouse pada build produksi, terutama SEO, Accessibility, Best Practices, dan Performance. Catat masalah dan perbaiki sebelum mengklaim skor tertentu.
+- [ ] Verifikasi domain di Google Search Console dan kirim `https://nurani-tiyoy.vercel.app/sitemap.xml`.
+- [ ] Uji kartu pratinjau tautan di aplikasi chat/media sosial. Crawler pihak ketiga dapat menyimpan pratinjau lama dalam cache.
+
+> Content-Security-Policy (CSP) belum diaktifkan otomatis. Sebelum menambahkannya, inventarisasi semua origin API, audio, dan font yang benar-benar digunakan, lalu uji policy di preview deployment agar tidak memblokir fitur. Jangan menerapkan CSP ketat tanpa pengujian browser.
+
+## 5. Push ke GitHub
 
 ```bash
 git status
@@ -61,7 +78,7 @@ git push
 
 Pastikan `.env.local` atau secret pribadi tidak ikut di-commit. Endpoint `NEXT_PUBLIC_*` di `.env.example` adalah URL publik, bukan tempat untuk menyimpan secret.
 
-## 5. Deploy di Vercel
+## 6. Deploy di Vercel
 
 - [ ] Import repository GitHub yang benar.
 - [ ] Root Directory menunjuk ke folder yang berisi `package.json`.

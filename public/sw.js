@@ -1,5 +1,5 @@
 /* Lightweight app-shell service worker for the Next.js App Router. */
-const SW_VERSION = 'nurani-pwa-v8';
+const SW_VERSION = 'nurani-pwa-v9';
 const APP_SHELL_CACHE = `${SW_VERSION}-shell`;
 const API_CACHE = `${SW_VERSION}-api`;
 const RUNTIME_CACHE = `${SW_VERSION}-runtime`;
@@ -46,8 +46,14 @@ self.addEventListener('fetch', (event) => {
     })());
     return;
   }
-  // Other internal Next.js endpoints remain under framework control.
-  if (url.origin === self.location.origin && url.pathname.startsWith('/_next/')) return;
+  // Framework and SEO metadata routes must bypass runtime caching. Otherwise a
+  // direct navigation to robots.txt/sitemap.xml could be cached as the app shell.
+  if (url.origin === self.location.origin && (
+    url.pathname.startsWith('/_next/') ||
+    url.pathname === '/robots.txt' ||
+    url.pathname === '/sitemap.xml' ||
+    url.pathname === '/og-nurani.png'
+  )) return;
 
   // The doa catalogue uses network-first so a malformed older API response is not
   // preferred forever; fall back to cache only when offline. Other API reads remain

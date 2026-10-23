@@ -1,10 +1,63 @@
 import './globals.css';
+import { canonicalUrl, siteDescription, siteName, siteUrl } from '@/lib/site-config';
+
+const isPreviewDeployment = process.env.VERCEL_ENV === 'preview';
 
 export const metadata = {
-  title: 'Nurani — Al-Qur’an Digital Indonesia',
-  description: 'Teman tilawah harian: baca Al-Qur’an, pelajari tafsir, dengarkan murottal, cek jadwal shalat, dan temukan doa harian.',
-  applicationName: 'Nurani Al-Qur’an Digital',
-  manifest: '/manifest.webmanifest',
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: siteName,
+    template: '%s | Nurani'
+  },
+  description: siteDescription,
+  applicationName: siteName,
+  category: 'education',
+  keywords: [
+    'Al-Qur’an digital',
+    'baca Al-Qur’an online',
+    'terjemahan Al-Qur’an Indonesia',
+    'murottal Al-Qur’an',
+    'jadwal shalat Indonesia',
+    'doa harian',
+    'Asmaul Husna',
+    'PWA Al-Qur’an'
+  ],
+  alternates: {
+    canonical: '/'
+  },
+  robots: {
+    index: !isPreviewDeployment,
+    follow: !isPreviewDeployment,
+    googleBot: {
+      index: !isPreviewDeployment,
+      follow: !isPreviewDeployment,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+      'max-video-preview': -1
+    }
+  },
+  openGraph: {
+    type: 'website',
+    locale: 'id_ID',
+    url: canonicalUrl,
+    siteName,
+    title: siteName,
+    description: siteDescription,
+    images: [
+      {
+        url: '/og-nurani.png',
+        width: 1200,
+        height: 630,
+        alt: 'Nurani — Al-Qur’an Digital Indonesia, teman ibadah harian'
+      }
+    ]
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: siteName,
+    description: siteDescription,
+    images: ['/og-nurani.png']
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
@@ -29,10 +82,37 @@ export const viewport = {
   themeColor: '#064e3b'
 };
 
+const structuredData = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: siteName,
+  alternateName: 'Nurani',
+  url: canonicalUrl,
+  description: siteDescription,
+  applicationCategory: 'EducationalApplication',
+  operatingSystem: 'Any',
+  inLanguage: 'id-ID',
+  image: `${siteUrl}/og-nurani.png`,
+  featureList: [
+    'Membaca Al-Qur’an dengan terjemahan Indonesia',
+    'Audio murottal dan mode murajaah',
+    'Jadwal shalat wilayah Indonesia',
+    'Doa harian dan Asmaul Husna',
+    'Progres tilawah dan target khatam',
+    'Dukungan Progressive Web App'
+  ]
+};
+
 export default function RootLayout({ children }) {
   return (
     <html lang="id">
-      <body>{children}</body>
+      <body>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData).replace(/</g, '\\u003c') }}
+        />
+        {children}
+      </body>
     </html>
   );
 }

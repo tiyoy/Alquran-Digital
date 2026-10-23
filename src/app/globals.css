@@ -683,3 +683,87 @@ h1, h2, h3, p { margin-top: 0; }
 @media (max-width: 767px) {
   .app-footer { padding: 15px 18px 24px; font-size: 10px; }
 }
+
+/* Friendly recovery screens for production routing/runtime failures. */
+.system-feedback-page {
+  display: grid;
+  place-items: center;
+  min-height: 100dvh;
+  padding: 24px;
+  background: var(--app-bg);
+  color: var(--ink);
+}
+.system-feedback-card {
+  width: min(100%, 520px);
+  padding: clamp(26px, 6vw, 48px);
+  border: 1px solid var(--line);
+  border-radius: 28px;
+  background: var(--surface);
+  box-shadow: var(--shadow-strong);
+  text-align: center;
+}
+.system-feedback-icon {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 22px;
+  border-radius: 22px;
+  background: var(--emerald-pale);
+  color: var(--emerald);
+}
+.system-feedback-icon-warning {
+  background: color-mix(in srgb, var(--gold) 13%, var(--surface));
+  color: var(--gold);
+}
+.system-feedback-eyebrow {
+  margin-bottom: 10px;
+  color: var(--emerald);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .15em;
+}
+.system-feedback-card h1 {
+  margin-bottom: 12px;
+  font-size: clamp(27px, 5vw, 38px);
+  line-height: 1.15;
+  letter-spacing: -.055em;
+}
+.system-feedback-description {
+  max-width: 380px;
+  margin: 0 auto 24px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.8;
+}
+.system-feedback-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 48px;
+  padding: 0 19px;
+  border: 1px solid transparent;
+  border-radius: 15px;
+  background: var(--emerald-deep);
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  text-decoration: none;
+  cursor: pointer;
+}
+.system-feedback-action:hover { filter: brightness(1.05); }
+.system-feedback-action:focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; }
+.system-feedback-brand,
+.system-feedback-footnote {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  margin-top: 25px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.7;
+}
+.system-feedback-footnote { display: block; max-width: 360px; margin: 21px auto 0; }
