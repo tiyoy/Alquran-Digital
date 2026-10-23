@@ -230,3 +230,8 @@ Saat ini repository belum menyertakan file `LICENSE`. Tentukan lisensi yang sesu
 <p align="center">
   Dibuat dengan niat baik dan secangkir kopi oleh <a href="https://www.instagram.com/cecep.maulana_/" target="_blank" rel="noopener noreferrer">Cecep Maulanaツ</a>.
 </p>
+
+
+## Catatan perbaikan katalog doa
+
+Katalog doa menormalkan urutan berdasarkan ID numerik yang tersedia dan memastikan **Doa sebelum makan** berada sebelum **Doa sesudah makan**. Entri **Membaca basmalah sebelum makan** tetap terpisah dan tidak tertukar dengan redaksi doa sebelum makan. Service worker menggunakan cache versi baru agar pembaruan tidak tertahan cache lama.

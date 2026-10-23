@@ -23,6 +23,10 @@ export const fallbackDuas = [
     terjemah: 'Ya Allah, berkahilah apa yang telah Engkau anugerahkan kepada kami dan jagalah kami dari siksa neraka.',
     sumber: 'Al-Adzkâr (Imam an-Nawawi); penilaian sanad riwayat doa ini diperselisihkan.'
   },
+  { id: 2, judul: 'Doa sesudah makan', arab: 'الْحَمْدُ لِلَّهِ الَّذِي أَطْعَمَنَا وَسَقَانَا وَجَعَلَنَا مِنَ الْمُسْلِمِينَ', latin: 'Alhamdulillaahil-ladzi ath’amanaa wa saqaanaa wa ja’alanaa minal muslimiin.', terjemah: 'Segala puji bagi Allah yang telah memberi kami makan dan minum, serta menjadikan kami termasuk orang-orang muslim.', sumber: 'HR. Abu Dawud' },
+  { id: 3, judul: 'Doa sebelum tidur', arab: 'بِاسْمِكَ اللَّهُمَّ أَمُوتُ وَأَحْيَا', latin: 'Bismika Allahumma amuutu wa ahyaa.', terjemah: 'Dengan nama-Mu, ya Allah, aku mati dan aku hidup.', sumber: 'HR. Bukhari' },
+  { id: 4, judul: 'Doa bangun tidur', arab: 'الْحَمْدُ لِلَّهِ الَّذِي أَحْيَانَا بَعْدَ مَا أَمَاتَنَا وَإِلَيْهِ النُّشُورُ', latin: 'Alhamdulillaahil-ladzi ahyaanaa ba’da maa amaatanaa wa ilaihin-nusyuur.', terjemah: 'Segala puji bagi Allah yang menghidupkan kami setelah mematikan kami, dan kepada-Nya kami dibangkitkan.', sumber: 'HR. Bukhari' },
+  { id: 5, judul: 'Doa memohon kebaikan', arab: 'رَبَّنَا آتِنَا فِي الدُّنْيَا حَسَنَةً وَفِي الْآخِرَةِ حَسَنَةً وَقِنَا عَذَابَ النَّارِ', latin: 'Rabbanaa aatinaa fid-dunyaa hasanah wa fil-aakhirati hasanah wa qinaa ‘adzaaban-naar.', terjemah: 'Ya Tuhan kami, berilah kami kebaikan di dunia dan kebaikan di akhirat, serta lindungilah kami dari azab neraka.', sumber: 'QS. Al-Baqarah: 201' },
   {
     id: 6,
     judul: 'Membaca basmalah sebelum makan',
@@ -31,24 +35,40 @@ export const fallbackDuas = [
     terjemah: 'Dengan nama Allah.',
     sumber: 'Tuntunan menyebut nama Allah sebelum makan; diriwayatkan dalam hadis sahih.'
   },
-  { id: 2, judul: 'Doa sesudah makan', arab: 'الْحَمْدُ لِلَّهِ الَّذِي أَطْعَمَنَا وَسَقَانَا وَجَعَلَنَا مِنَ الْمُسْلِمِينَ', latin: 'Alhamdulillaahil-ladzi ath’amanaa wa saqaanaa wa ja’alanaa minal muslimiin.', terjemah: 'Segala puji bagi Allah yang telah memberi kami makan dan minum, serta menjadikan kami termasuk orang-orang muslim.', sumber: 'HR. Abu Dawud' },
-  { id: 3, judul: 'Doa sebelum tidur', arab: 'بِاسْمِكَ اللَّهُمَّ أَمُوتُ وَأَحْيَا', latin: 'Bismika Allahumma amuutu wa ahyaa.', terjemah: 'Dengan nama-Mu, ya Allah, aku mati dan aku hidup.', sumber: 'HR. Bukhari' },
-  { id: 4, judul: 'Doa bangun tidur', arab: 'الْحَمْدُ لِلَّهِ الَّذِي أَحْيَانَا بَعْدَ مَا أَمَاتَنَا وَإِلَيْهِ النُّشُورُ', latin: 'Alhamdulillaahil-ladzi ahyaanaa ba’da maa amaatanaa wa ilaihin-nusyuur.', terjemah: 'Segala puji bagi Allah yang menghidupkan kami setelah mematikan kami, dan kepada-Nya kami dibangkitkan.', sumber: 'HR. Bukhari' },
-  { id: 5, judul: 'Doa memohon kebaikan', arab: 'رَبَّنَا آتِنَا فِي الدُّنْيَا حَسَنَةً وَفِي الْآخِرَةِ حَسَنَةً وَقِنَا عَذَابَ النَّارِ', latin: 'Rabbanaa aatinaa fid-dunyaa hasanah wa fil-aakhirati hasanah wa qinaa ‘adzaaban-naar.', terjemah: 'Ya Tuhan kami, berilah kami kebaikan di dunia dan kebaikan di akhirat, serta lindungilah kami dari azab neraka.', sumber: 'QS. Al-Baqarah: 201' }
 ];
 
 // Keep the well-known before-meal prayer accurate even if an API or older local cache
-// returns a different text for the same title. If a source omits it, add the curated entry.
+// returns a different text for the same title. Bismillah is a separate item and must not
+// be mistaken for the longer supplication just because its title also says "sebelum makan".
 export function enforceBeforeMealDua(duas) {
   if (!Array.isArray(duas) || duas.length === 0) return Array.isArray(duas) ? duas : [];
   const list = [...duas];
   const pattern = /\b(sebelum|mau)\s+makan\b|\bdoa\s+makan\b|\bbefore\s+(eating|meal)\b/i;
-  const index = list.findIndex((item) => pattern.test(`${item?.judul || ''} ${item?.title || ''}`));
-  const canonical = fallbackDuas[0];
+  const index = list.findIndex((item) => {
+    const title = `${item?.judul || ''} ${item?.title || ''}`;
+    return pattern.test(title) && !/\b(?:bismillah|basmalah)\b/i.test(title);
+  });
+  const canonical = fallbackDuas.find((item) => item.judul === 'Doa sebelum makan') || fallbackDuas[0];
   if (index >= 0) {
     list[index] = { ...list[index], ...canonical, id: list[index]?.id ?? canonical.id };
   } else {
-    list.unshift(canonical);
+    list.push(canonical);
+  }
+
+  // The UI numbers cards by array position. Sort numeric API/cache IDs to repair old saved
+  // lists where item ID 6 (basmalah) appeared between IDs 1 and 2.
+  const allHaveNumericIds = list.every((item) => item?.id !== null && item?.id !== undefined && String(item.id).trim() !== '' && Number.isFinite(Number(item.id)));
+  if (allHaveNumericIds) list.sort((a, b) => Number(a.id) - Number(b.id));
+
+  // Keep the before-meal entry ahead of the after-meal entry even if the upstream API
+  // accidentally sends IDs 1 and 2 in the opposite content order.
+  const beforeIndex = list.findIndex((item) => {
+    const title = `${item?.judul || ''} ${item?.title || ''}`;
+    return /\b(sebelum|mau)\s+makan\b|\bbefore\s+(eating|meal)\b/i.test(title) && !/\b(?:bismillah|basmalah)\b/i.test(title);
+  });
+  const afterIndex = list.findIndex((item) => /\b(sesudah|setelah)\s+makan\b|\bafter\s+(eating|meal)\b/i.test(`${item?.judul || ''} ${item?.title || ''}`));
+  if (beforeIndex >= 0 && afterIndex >= 0 && afterIndex < beforeIndex) {
+    [list[beforeIndex], list[afterIndex]] = [list[afterIndex], list[beforeIndex]];
   }
   return list;
 }
