@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
-  ArrowRight, AudioLines, Bookmark, BookMarked, BookOpen, CalendarDays, Check,
+  ArrowRight, AudioLines, Bookmark, BookMarked, BookOpen, CalendarDays, Check, Compass,
   ChevronDown, ChevronLeft, ChevronRight, Clock3, Copy, Download, HandHeart,
   Headphones, Heart, Home, Info, ListFilter, LoaderCircle, MapPin, Minus, Moon, Gauge,
   MoreHorizontal, Pause, Play, Plus, RefreshCw, Search, Settings2, ShieldCheck,
@@ -24,6 +24,7 @@ import {
   MAX_AUDIO_TRACK_BYTES, MAX_TOTAL_AUDIO_BYTES, OFFLINE_AUDIO_CACHE_NAME, OFFLINE_AUDIO_STORAGE_KEY,
   inspectOfflineAudioCache, normalizeOfflineAudioTracks, totalOfflineAudioBytes, upsertOfflineAudioTrack
 } from '@/lib/offline-audio';
+import QiblaFinder from '@/components/QiblaFinder';
 import {
   chooseAudio, cleanArabicText, fetchAllPrayerCities, fetchDuas, fetchPrayerCity, fetchPrayerSchedule,
   fetchQuran, firstArray, normalizeSurah, normalizeVerse, unwrapPayload
@@ -1623,7 +1624,7 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
   };
   const exportLocalBackup = () => {
     try {
-      const backup = createLocalBackup(window.localStorage, '1.14.0');
+      const backup = createLocalBackup(window.localStorage, '1.15.0');
       const entryCount = Object.keys(backup.data).length;
       if (!entryCount) {
         showToast('Belum ada data Nurani yang bisa dicadangkan.');
@@ -1762,6 +1763,11 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
           <button className="quick-card quick-dua" onClick={() => setActiveTab('duas')}><span className="quick-icon"><HandHeart size={21} /></span><strong>Doa harian</strong><span>Temani aktivitasmu</span><ArrowRight size={16} className="quick-arrow" /></button>
           <button className="quick-card quick-asma" onClick={() => setActiveTab('asma')}><span className="quick-icon"><Sparkles size={21} /></span><strong>Asmaul Husna</strong><span>99 nama Allah</span><ArrowRight size={16} className="quick-arrow" /></button>
         </div>
+        <button type="button" className="qibla-home-shortcut card-surface" onClick={() => { setSelectedSurah(null); setActiveDuaSlug(null); setActiveTab('qibla'); }}>
+          <span className="qibla-shortcut-icon"><Compass size={23} /></span>
+          <span className="qibla-shortcut-copy"><strong>Temukan arah kiblat</strong><small>Gunakan lokasi perangkat dan kompas jika tersedia.</small></span>
+          <span className="qibla-shortcut-action">Buka <ArrowRight size={15} /></span>
+        </button>
       </section>
 
       <section className="section-block last-read-section">
@@ -1980,6 +1986,7 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
         {activeTab === 'prayer' && renderPrayer()}
         {activeTab === 'duas' && (activeDuaSlug ? renderDuaDetail() : renderDuas())}
         {activeTab === 'asma' && renderAsma()}
+        {activeTab === 'qibla' && <QiblaFinder onBack={() => { setActiveDuaSlug(null); setSelectedSurah(null); setActiveTab('home'); }} />}
       </main>
 
       <footer className="app-footer">

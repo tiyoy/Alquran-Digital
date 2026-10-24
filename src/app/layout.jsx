@@ -20,7 +20,9 @@ export const metadata = {
     'jadwal shalat Indonesia',
     'doa harian',
     'Asmaul Husna',
-    'PWA Al-Qur’an'
+    'PWA Al-Qur’an',
+    'Arah kiblat online',
+    'Kompas kiblat'
   ],
   alternates: {
     canonical: '/'
@@ -99,7 +101,8 @@ const structuredData = {
     'Jadwal shalat wilayah Indonesia',
     'Doa harian dan Asmaul Husna',
     'Progres tilawah dan target khatam',
-    'Dukungan Progressive Web App'
+    'Dukungan Progressive Web App',
+    'Arah kiblat dengan lokasi dan kompas perangkat'
   ]
 };
 

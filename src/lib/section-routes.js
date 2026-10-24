@@ -35,6 +35,13 @@ export const SECTION_ROUTES = [
     title: '99 Asmaul Husna dan Artinya',
     description: 'Pelajari 99 Asmaul Husna dengan tulisan Arab, transliterasi Latin, makna, dan fitur favorit untuk belajar bertahap.',
     keywords: ['99 Asmaul Husna', 'Asmaul Husna dan artinya', 'nama-nama Allah']
+  },
+  {
+    tab: 'qibla',
+    path: '/arah-kiblat',
+    title: 'Arah Kiblat Online dengan Kompas',
+    description: 'Hitung azimuth kiblat dari lokasi perangkat dan gunakan sensor kompas jika didukung browser. Lokasi diproses di perangkat.',
+    keywords: ['arah kiblat online', 'kompas kiblat', 'arah Kaabah', 'qibla finder Indonesia']
   }
 ];
 
