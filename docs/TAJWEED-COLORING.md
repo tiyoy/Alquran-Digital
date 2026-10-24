@@ -4,7 +4,7 @@ Nurani v1.16.0 menyertakan mode warna tajwid opt-in. Pengguna mengaktifkannya di
 
 ## Sumber data
 
-Mode warna memakai edition `quran-tajweed` yang disediakan oleh AlQuran.cloud / Islamic Network. Peraturan warna bersumber dari [Tajweed Guide](https://alquran.cloud/tajweed-guide), yang mendokumentasikan 17 kode dan format anotasi seperti `[h:9421[ٱ]`. Lihat juga [dokumentasi API](https://alquran.cloud/api).
+Mode warna memakai edition `quran-tajweed` yang disediakan oleh AlQuran.cloud / Islamic Network. Peraturan warna bersumber dari [Tajweed Guide](https://alquran.cloud/tajweed-guide), yang mendokumentasikan 17 kode dan format anotasi seperti `[h:9421[ٱ]` maupun `[l[ل]`. Lihat juga [dokumentasi API](https://alquran.cloud/api).
 
 Nurani tidak membuat inferensi hukum tajwid sendiri. Format beranotasi diparsing menjadi text segments dan React spans, bukan disuntikkan sebagai HTML. Saat mode mati atau data gagal dimuat, teks standar Nurani tetap tersedia.
 

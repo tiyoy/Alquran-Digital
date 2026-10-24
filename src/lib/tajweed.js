@@ -29,9 +29,10 @@ export function parseTajweedMarkup(value) {
   const text = String(value ?? '');
   if (!text) return [];
 
-  // Example source marker: [h:9421[ٱ]. Parse to text segments and React spans,
-  // never inject HTML from a remote source.
-  const marker = /\[([a-z]):\d+\[([^\]]*)\]/g;
+  // AlQuran.cloud has used both marker forms: [h:9421[ٱ] and [l[ل].
+  // The numeric annotation ID is optional. Convert markers into text segments
+  // and React spans; never inject HTML from a remote source.
+  const marker = /\[([a-z])(?::\d+)?\[([^\]]*)\]/gi;
   const parts = [];
   let cursor = 0;
   let match;
@@ -39,8 +40,10 @@ export function parseTajweedMarkup(value) {
   while ((match = marker.exec(text)) !== null) {
     if (match.index > cursor) parts.push({ text: text.slice(cursor, match.index), code: null, rule: null });
     const rule = TAJWEED_RULE_BY_CODE[match[1]] || null;
+    // Even if a future edition adds a rule code we do not recognize, keep its
+    // Arabic content readable without leaking the annotation syntax.
     if (rule) parts.push({ text: match[2], code: rule.code, rule });
-    else parts.push({ text: match[0], code: null, rule: null });
+    else parts.push({ text: match[2], code: null, rule: null });
     cursor = marker.lastIndex;
   }
   if (cursor < text.length) parts.push({ text: text.slice(cursor), code: null, rule: null });
