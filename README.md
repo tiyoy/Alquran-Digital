@@ -364,3 +364,10 @@ Versi 1.6.0 menambahkan URL langsung untuk setiap ayat dengan format `/quran/<no
 Route URL ayat sekarang mencoba memuat data surah pada server dan menyertakan teks Arab, Latin, serta terjemahan dalam HTML awal. Data surah yang berhasil diambil disimpan di cache Next.js selama 24 jam dan dikirim ke pembaca agar pengalaman berbagi ayat tetap sama. Jika API sumber sedang tidak tersedia, route tetap bisa dirender dengan metadata dan pembaca akan memakai mekanisme pemuatan data yang sudah ada sebagai fallback.
 
 Pemeriksaan deployment setelah rilis: buka URL ayat lalu gunakan **View Page Source**. Pastikan teks ayat terlihat pada HTML awal, metadata judul/canonical unik, tombol berbagi tetap berfungsi, dan ayat yang dituju tetap disorot. Jalankan `npm run lint` dan `npm run build` sebelum push ke produksi.
+
+## Pembaruan v1.12.0 — Pengelolaan audio per qari
+
+- Audio untuk surah yang sama kini dapat disimpan dari beberapa qari tanpa saling mengganti.
+- Panel pengelolaan offline mendukung filter qari dan hapus semua audio untuk qari terpilih.
+- Batas total penyimpanan menghitung audio dari semua qari. Lihat [`docs/OFFLINE-AUDIO-MANAGEMENT.md`](./docs/OFFLINE-AUDIO-MANAGEMENT.md).
+- EQuran mendokumentasikan MP3 berkualitas tinggi, tetapi tidak mencantumkan beberapa bitrate untuk file yang sama; Nurani mempertahankan kualitas asli dan tidak mengklaim dapat mengubah bitrate.

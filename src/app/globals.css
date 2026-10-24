@@ -534,6 +534,10 @@ h1, h2, h3, p { margin-top: 0; }
 .offline-audio-manager-heading > div { display: flex; min-width: 0; flex-direction: column; gap: 4px; }
 .offline-audio-manager-heading strong { font-size: 11px; }
 .offline-audio-manager-heading small { color: var(--muted); font-size: 9px; line-height: 1.5; }
+.offline-audio-filter { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 10px; color: var(--muted); font-size: 9px; }
+.offline-audio-filter select { max-width: 72%; min-width: 0; height: 35px; padding: 0 9px; border: 1px solid var(--line); border-radius: 10px; color: var(--ink); background: var(--surface); font-size: 9px; }
+.theme-dark .offline-audio-filter select { color: #edf8f1; background: #12251d; }
+.offline-audio-filter select option { color: var(--ink); background: var(--surface); }
 .offline-audio-list { max-height: 220px; }
 .offline-audio-downloading { display: flex; align-items: center; gap: 7px; margin: 10px 0 0; color: var(--emerald); font-size: 10px; }
 .audio-download-progress { width: 100%; margin: 9px 0 4px; padding: 11px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-muted); }
