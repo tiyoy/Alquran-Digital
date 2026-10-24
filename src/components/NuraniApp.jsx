@@ -6,11 +6,11 @@ import {
   ChevronDown, ChevronLeft, ChevronRight, Clock3, Copy, Download, HandHeart,
   Headphones, Heart, Home, Info, ListFilter, LoaderCircle, MapPin, Minus, Moon,
   MoreHorizontal, Pause, Play, Plus, RefreshCw, Search, Settings2, ShieldCheck,
-  SlidersHorizontal, Sparkles, Sun, Wifi, WifiOff, X, Repeat, Target
+  Share2, SlidersHorizontal, Sparkles, Sun, Wifi, WifiOff, X, Repeat, Target
 } from 'lucide-react';
 import { asmaulHusna, enforceBeforeMealDua, fallbackDuas, fallbackSurahs, MIN_DUA_CATALOG_SIZE } from '@/lib/data';
 import { PATH_TABS, SECTION_SEO_BY_TAB, TAB_PATHS, VALID_TABS } from '@/lib/section-routes';
-import { getSurahNumberFromPathname, getSurahPath } from '@/lib/surah-routes';
+import { getSurahNumberFromPathname, getSurahPath, getVerseNumberFromPathname, getVersePath } from '@/lib/surah-routes';
 import { siteName, siteUrl } from '@/lib/site-config';
 import {
   chooseAudio, cleanArabicText, fetchAllPrayerCities, fetchDuas, fetchPrayerCity, fetchPrayerSchedule,
@@ -216,13 +216,18 @@ function findTafsirText(payload, verseNumber) {
   return typeof direct === 'string' ? direct : '';
 }
 
-export default function HomePage({ initialTab = 'home', initialSurahNumber = null }) {
+export default function HomePage({ initialTab = 'home', initialSurahNumber = null, initialVerseNumber = null }) {
   const safeInitialTab = VALID_TABS.includes(initialTab) ? initialTab : 'home';
   const parsedInitialSurahNumber = Number(initialSurahNumber);
   const safeInitialSurahNumber = Number.isInteger(parsedInitialSurahNumber) && parsedInitialSurahNumber >= 1 && parsedInitialSurahNumber <= 114
     ? parsedInitialSurahNumber
     : null;
   const initialSurahMetadata = safeInitialSurahNumber ? fallbackSurahs[safeInitialSurahNumber - 1] : null;
+  const parsedInitialVerseNumber = Number(initialVerseNumber);
+  const safeInitialVerseNumber = initialSurahMetadata && Number.isInteger(parsedInitialVerseNumber)
+    && parsedInitialVerseNumber >= 1 && parsedInitialVerseNumber <= Number(initialSurahMetadata.jumlahAyat)
+    ? parsedInitialVerseNumber
+    : null;
   const [activeTab, setActiveTab] = useState(safeInitialTab);
   const [theme, setTheme] = useState('light');
   const [dateLabel, setDateLabel] = useState('');
@@ -237,6 +242,7 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
   const [surahQuery, setSurahQuery] = useState('');
   const [surahFilter, setSurahFilter] = useState('all');
   const [selectedSurah, setSelectedSurah] = useState(initialSurahMetadata);
+  const [sharedVerseTarget] = useState(safeInitialVerseNumber);
   const [verses, setVerses] = useState([]);
   const [verseLoading, setVerseLoading] = useState(Boolean(initialSurahMetadata));
   const [verseQuery, setVerseQuery] = useState('');
@@ -406,8 +412,12 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
   useEffect(() => {
     const queryTab = new URLSearchParams(window.location.search).get('tab');
     const currentPath = normalizePathname(window.location.pathname);
+    const currentVerseNumber = getVerseNumberFromPathname(currentPath);
+    const currentPathSurahNumber = getSurahNumberFromPathname(currentPath);
+    const preserveAyahRoute = activeTab === 'quran' && selectedSurah && currentVerseNumber
+      && currentPathSurahNumber === Number(selectedSurah.nomor);
     const targetPath = activeTab === 'quran' && selectedSurah
-      ? getSurahPath(selectedSurah)
+      ? (preserveAyahRoute ? currentPath : getSurahPath(selectedSurah))
       : (TAB_PATHS[activeTab] || '/');
 
     // On first mount, let the boot effect align state with a direct route before
@@ -424,14 +434,21 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
 
   // Keep browser tab title, descriptions and canonical metadata aligned while navigating client-side.
   useEffect(() => {
+    const currentPath = normalizePathname(window.location.pathname);
+    const currentPathSurahNumber = getSurahNumberFromPathname(currentPath);
+    const currentVerseNumber = getVerseNumberFromPathname(currentPath);
+    const isCurrentAyahRoute = activeTab === 'quran' && selectedSurah && currentVerseNumber
+      && currentPathSurahNumber === Number(selectedSurah.nomor);
     const seo = activeTab === 'quran' && selectedSurah
       ? {
           title: `Surah ${selectedSurah.namaLatin} (${selectedSurah.arti || 'Al-Qur’an'}) — Baca Al-Qur’an Online`,
           description: `Baca Surah ${selectedSurah.namaLatin}, surah ke-${selectedSurah.nomor} dalam Al-Qur’an, dengan ${selectedSurah.jumlahAyat || 'ayat'} ayat, teks Arab, transliterasi Latin, terjemahan Indonesia, audio murottal, dan bookmark.`,
-          path: getSurahPath(selectedSurah)
+          path: isCurrentAyahRoute ? getVersePath(selectedSurah, currentVerseNumber) : getSurahPath(selectedSurah),
+          ayah: isCurrentAyahRoute ? currentVerseNumber : null
         }
       : (SECTION_SEO_BY_TAB[activeTab] || SECTION_SEO_BY_TAB.home);
-    const fullTitle = activeTab === 'home' ? siteName : `${seo.title} | Nurani`;
+    const displayTitle = seo.ayah ? `${seo.title} · Ayat ${seo.ayah}` : seo.title;
+    const fullTitle = activeTab === 'home' ? siteName : `${displayTitle} | Nurani`;
     document.title = fullTitle;
 
     const setMeta = (selector, attribute, value) => {
@@ -650,12 +667,14 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
   // Open a surah when a reader URL is loaded directly or refreshed. The ref avoids
   // re-fetching it when the catalogue metadata updates after the first render.
   useEffect(() => {
-    if (!safeInitialSurahNumber || initialSurahOpenedRef.current === safeInitialSurahNumber) return;
-    initialSurahOpenedRef.current = safeInitialSurahNumber;
+    if (!safeInitialSurahNumber) return;
+    const routeKey = `${safeInitialSurahNumber}:${safeInitialVerseNumber || 1}`;
+    if (initialSurahOpenedRef.current === routeKey) return;
+    initialSurahOpenedRef.current = routeKey;
     const initialSurah = surahs.find((item) => Number(item.nomor) === safeInitialSurahNumber)
       || fallbackSurahs[safeInitialSurahNumber - 1];
-    if (initialSurah) void openSurah(initialSurah, 1);
-  }, [safeInitialSurahNumber, surahs, openSurah]);
+    if (initialSurah) void openSurah(initialSurah, safeInitialVerseNumber || 1);
+  }, [safeInitialSurahNumber, safeInitialVerseNumber, surahs, openSurah]);
 
   useEffect(() => {
     const syncTabFromHistory = () => {
@@ -777,6 +796,37 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
     const text = [verse.teksArab, verse.teksLatin, verse.teksIndonesia].filter(Boolean).join('\n\n');
     try { await navigator.clipboard.writeText(text); showToast('Teks ayat disalin.'); }
     catch { showToast('Clipboard tidak tersedia di browser ini.'); }
+  };
+  const shareVerse = async (verse) => {
+    if (!selectedSurah || !verse?.nomorAyat) return;
+    const path = getVersePath(selectedSurah, verse.nomorAyat);
+    const url = new URL(path, window.location.origin).toString();
+    const reference = `${selectedSurah.namaLatin} ${selectedSurah.nomor}:${verse.nomorAyat}`;
+    const text = [reference, verse.teksArab, verse.teksLatin, verse.teksIndonesia].filter(Boolean).join('\n\n');
+    try {
+      if (typeof navigator.share === 'function') {
+        await navigator.share({ title: `${reference} — Nurani`, text, url });
+        return;
+      }
+      const shareText = `${text}\n\nBaca ayat ini di Nurani: ${url}`;
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(shareText);
+      } else {
+        const field = document.createElement('textarea');
+        field.value = shareText;
+        field.setAttribute('readonly', '');
+        field.style.position = 'fixed';
+        field.style.opacity = '0';
+        document.body.appendChild(field);
+        field.select();
+        const copied = document.execCommand('copy');
+        field.remove();
+        if (!copied) throw new Error('Copy command failed');
+      }
+      showToast('Teks ayat dan tautan berhasil disalin.');
+    } catch (error) {
+      if (error?.name !== 'AbortError') showToast('Ayat belum bisa dibagikan. Coba salin teks ayat terlebih dahulu.');
+    }
   };
   const openTafsir = async (verse = null) => {
     if (!selectedSurah) return;
@@ -1005,8 +1055,10 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
         {verses.map((verse, index) => {
           const verseKey = `${selectedSurah?.nomor}:${verse.nomorAyat}`;
           const isPlayingVerse = audioInfo?.trackType === 'verse' && audioInfo?.surahNumber === selectedSurah?.nomor && Number(audioInfo?.verseIndex) === index;
-          return <article id={`verse-${selectedSurah?.nomor}-${verse.nomorAyat}`} className={`verse-card card-surface ${isPlayingVerse ? 'is-playing' : ''}`} key={`${selectedSurah?.nomor}-${verse.nomorAyat}`}>
-            <div className="verse-card-top"><div className="verse-number"><span>{verse.nomorAyat}</span></div><div className="verse-meta"><span>{selectedSurah?.namaLatin} · Ayat {verse.nomorAyat}</span>{isPlayingVerse && <span className="now-playing"><AudioLines size={13} /> Sedang diputar</span>}</div><div className="verse-quick-actions"><button className="icon-button small" aria-label="Putar ayat" onClick={() => playVerse(verse, index)}>{isPlayingVerse && audioPlaying ? <AudioLines size={16} /> : <Play size={16} />}</button><button className={`icon-button small ${bookmarkedVerses.includes(verseKey) ? 'is-saved' : ''}`} aria-label="Bookmark ayat" onClick={() => toggleVerseBookmark(verse.nomorAyat)}><Bookmark size={16} fill={bookmarkedVerses.includes(verseKey) ? 'currentColor' : 'none'} /></button><button className="icon-button small" aria-label="Salin ayat" onClick={() => copyVerse(verse)}><Copy size={15} /></button><button className="icon-button small tafsir-action" aria-label="Buka tafsir ayat" onClick={() => openTafsir(verse)}><MoreHorizontal size={17} /></button></div></div>
+          const isSharedVerseTarget = Number(selectedSurah?.nomor) === safeInitialSurahNumber
+            && Number(sharedVerseTarget) === Number(verse.nomorAyat);
+          return <article id={`verse-${selectedSurah?.nomor}-${verse.nomorAyat}`} className={`verse-card card-surface ${isPlayingVerse ? 'is-playing' : ''} ${isSharedVerseTarget ? 'is-shared-target' : ''}`} key={`${selectedSurah?.nomor}-${verse.nomorAyat}`}>
+            <div className="verse-card-top"><div className="verse-number"><span>{verse.nomorAyat}</span></div><div className="verse-meta"><span>{selectedSurah?.namaLatin} · Ayat {verse.nomorAyat}</span>{isPlayingVerse && <span className="now-playing"><AudioLines size={13} /> Sedang diputar</span>}</div><div className="verse-quick-actions"><button className="icon-button small" aria-label="Putar ayat" onClick={() => playVerse(verse, index)}>{isPlayingVerse && audioPlaying ? <AudioLines size={16} /> : <Play size={16} />}</button><button className={`icon-button small ${bookmarkedVerses.includes(verseKey) ? 'is-saved' : ''}`} aria-label="Bookmark ayat" onClick={() => toggleVerseBookmark(verse.nomorAyat)}><Bookmark size={16} fill={bookmarkedVerses.includes(verseKey) ? 'currentColor' : 'none'} /></button><button className="icon-button small" aria-label="Salin teks ayat" title="Salin teks ayat" onClick={() => copyVerse(verse)}><Copy size={15} /></button><button className="icon-button small" aria-label="Bagikan ayat" title="Bagikan ayat" onClick={() => shareVerse(verse)}><Share2 size={15} /></button><button className="icon-button small tafsir-action" aria-label="Buka tafsir ayat" title="Buka tafsir ayat" onClick={() => openTafsir(verse)}><MoreHorizontal size={17} /></button></div></div>
             {arabicVisible && <p className="verse-arabic" dir="rtl" lang="ar" style={{ fontSize: `${arabicSize}px` }}>{cleanArabicText(verse.teksArab) || '—'}</p>}
             {latinVisible && verse.teksLatin && <p className="verse-latin" style={{ fontSize: `${latinSize}px` }}>{verse.teksLatin}</p>}
             {translationVisible && verse.teksIndonesia && <p className="verse-translation" style={{ fontSize: `${translationSize}px` }}>{verse.teksIndonesia}</p>}

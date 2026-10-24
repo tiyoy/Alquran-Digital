@@ -62,7 +62,7 @@ npm run start
 - [ ] Buka `/quran/1-al-fatihah`, `/quran/2-al-baqarah`, dan `/quran/36-yasin` langsung dari tab baru; reader harus membuka surah yang sesuai.
 - [ ] Periksa setiap route bagian dan beberapa route surah memiliki title, meta description, canonical dan Open Graph URL yang sesuai.
 - [ ] Klik navigasi antarbagian, lalu uji tombol Back/Forward; URL, judul tab browser dan konten harus tetap sinkron.
-- [ ] Pastikan sitemap mencantumkan lima URL bagian utama plus 114 URL surah individual (119 URL total), tanpa URL preview.
+- [ ] Pastikan sitemap mencantumkan lima URL bagian utama, 114 URL surah, dan 6.236 URL ayat (6.355 URL total), tanpa URL preview.
 - [ ] Buka HTML sumber halaman dan pastikan title, description, canonical, Open Graph, Twitter Card, dan JSON-LD muncul.
 - [ ] Pastikan `https://nurani-tiyoy.vercel.app/og-nurani.png` bisa dibuka dan ukurannya 1200×630.
 - [ ] Periksa response headers untuk `X-Content-Type-Options`, `Referrer-Policy`, `X-Frame-Options`, dan `Permissions-Policy`.
@@ -108,7 +108,7 @@ Pastikan `.env.local` atau secret pribadi tidak ikut di-commit. Endpoint `NEXT_P
 - [ ] Dari daftar surah, klik beberapa item dan pastikan URL berubah menjadi `/quran/<nomor>-<slug>`.
 - [ ] Uji Back/Forward browser untuk berpindah antara daftar dan detail surah.
 - [ ] Periksa title, description, canonical, dan Open Graph pada HTML untuk setidaknya tiga surah berbeda.
-- [ ] Pastikan sitemap mencakup 114 URL surah ditambah lima halaman utama (119 total).
+- [ ] Pastikan sitemap mencakup 114 URL surah, 6.236 URL ayat, dan lima halaman utama (6.355 total).
 - [ ] Setelah membuka satu surah secara online, uji URL yang sama ketika offline.
 
 
@@ -117,4 +117,4 @@ Pastikan `.env.local` atau secret pribadi tidak ikut di-commit. Endpoint `NEXT_P
 - [ ] Uji slider ukuran teks Latin pada ukuran minimum, tengah, dan maksimum; pastikan nilai tersimpan setelah refresh.
 - [ ] Uji Reset khatam: konfirmasi membatalkan tidak mengubah data; konfirmasi menerima menghapus progres keseluruhan/harian dan mengembalikan target ke 30 hari.
 - [ ] Pastikan bookmark dan posisi bacaan terakhir tetap ada setelah reset khatam.
-- [ ] Pastikan service worker versi `nurani-pwa-v13` mengambil aset deployment terbaru.
+- [ ] Pastikan service worker versi `nurani-pwa-v14` mengambil aset deployment terbaru.

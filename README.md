@@ -177,7 +177,7 @@ Fondasi SEO teknis sudah disiapkan untuk halaman utama aplikasi:
 - Header keamanan dasar ditetapkan di `next.config.js`: `X-Content-Type-Options`, `Referrer-Policy`, `X-Frame-Options`, dan `Permissions-Policy`.
 - Halaman pemulihan tersedia untuk URL yang tidak ditemukan (`not-found.jsx`) dan error runtime pada segmen halaman (`error.jsx`).
 
-Halaman utama dan empat bagian utama memiliki URL tersendiri, dan seluruh 114 surah kini memiliki route statis `/quran/<nomor>-<slug>`. Setiap route surah memiliki title, deskripsi, canonical, Open Graph, dan Twitter Card masing-masing. Navigasi bawah tetap mempertahankan pengalaman mobile satu halaman; daftar surah menyediakan tautan HTML yang bisa diikuti crawler. Sitemap mencantumkan 119 URL: lima route utama dan 114 route surah. Ayat dan doa individual belum memiliki URL tersendiri.
+Halaman utama dan empat bagian utama memiliki URL tersendiri, dan seluruh 114 surah kini memiliki route statis `/quran/<nomor>-<slug>`. Setiap route surah memiliki title, deskripsi, canonical, Open Graph, dan Twitter Card masing-masing. Navigasi bawah tetap mempertahankan pengalaman mobile satu halaman; daftar surah menyediakan tautan HTML yang bisa diikuti crawler. Sitemap mencantumkan 6.355 URL: lima route utama, 114 route surah, dan 6.236 route ayat. Doa individual belum memiliki URL tersendiri.
 
 Setelah deployment baru berhasil:
 
@@ -307,4 +307,9 @@ Katalog doa menormalkan urutan berdasarkan ID numerik yang tersedia dan memastik
 
 - Slider ukuran teks Latin/transliterasi pada pengaturan bacaan (12–30 px), tersimpan di perangkat dan dipulihkan setelah aplikasi dibuka kembali.
 - Tombol **Reset khatam** dengan konfirmasi, menghapus progres ayat dan catatan harian serta mengembalikan target ke 30 hari. Bookmark dan posisi bacaan terakhir tetap dipertahankan.
-- Cache service worker dinaikkan ke `nurani-pwa-v13` agar aset terbaru tidak tertahan oleh cache lama.
+- Cache service worker dinaikkan ke `nurani-pwa-v14` agar aset terbaru tidak tertahan oleh cache lama.
+
+
+## URL ayat yang bisa dibagikan
+
+Versi 1.6.0 menambahkan URL langsung untuk setiap ayat dengan format `/quran/<nomor>-<slug-surah>/<nomor-ayat>`, misalnya `/quran/1-al-fatihah/1`. Tombol **Bagikan ayat** akan membuka menu berbagi di perangkat yang mendukung Web Share API atau menyalin teks ayat beserta tautannya. Saat tautan dibuka, aplikasi akan menyorot ayat tujuan. Sitemap juga mencantumkan URL ayat.
