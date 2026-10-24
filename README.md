@@ -68,6 +68,11 @@ Catatan tadabbur bersifat lokal per browser/perangkat; belum ada akun atau sinkr
 
 
 
+
+### Perbaikan unduhan audio — v1.11.2
+
+Unduhan menggunakan endpoint same-origin `/api/audio-proxy` yang memvalidasi URL MP3 di `cdn.equran.id/audio-full/` dan meneruskan respons secara streaming. Ini menghindari kegagalan `fetch` lintas domain ketika CDN tidak mengirim CORS untuk host aplikasi. Client mencoba byte-range per potongan 4 MiB agar setiap permintaan cepat dan ukuran respons tetap kecil; jika CDN mengabaikan `Range`, aplikasi kembali ke stream penuh. Audio tetap disimpan di Cache API lokal, dan route proxy dilewati oleh service worker agar respons MP3 besar tidak disalin ke cache runtime.
+
 ### Perbaikan unduhan audio — v1.11.1
 
 - Memperbaiki metadata audio surah ketika halaman dibuka dari URL langsung atau katalog lokal lama.
@@ -78,7 +83,7 @@ Catatan tadabbur bersifat lokal per browser/perangkat; belum ada akun atau sinkr
 
 ### Unduhan audio murottal — v1.11.1
 
-Pada halaman pembaca, pilih qari lalu tekan **Unduh audio**. Aplikasi menampilkan progres, menyimpan satu track untuk setiap surah, dan membatasi satu file hingga 80 MB serta total cache hingga 200 MB. Sumber audio harus mengizinkan permintaan unduhan lintas situs (CORS); jika tidak, audio streaming biasa tetap tersedia tetapi file tidak bisa disimpan untuk offline. Buka Pengaturan → Kelola konten offline untuk memeriksa ukuran file dan menghapus satu audio atau seluruh audio. Berkas tersimpan secara lokal dan tidak masuk ke file backup JSON. Cache audio memakai nama stabil `nurani-audio-offline-v1` agar tidak ikut dihapus saat versi service worker berubah.
+Pada halaman pembaca, pilih qari lalu tekan **Unduh audio**. Aplikasi menampilkan progres, menyimpan satu track untuk setiap surah, dan membatasi satu file hingga 80 MB serta total cache hingga 200 MB. Unduhan audio memakai proxy same-origin supaya kebijakan CORS browser pada CDN tidak menghalangi penyimpanan offline; server/CDN sumber tetap harus bisa diakses dari deployment Vercel. Buka Pengaturan → Kelola konten offline untuk memeriksa ukuran file dan menghapus satu audio atau seluruh audio. Berkas tersimpan secara lokal dan tidak masuk ke file backup JSON. Cache audio memakai nama stabil `nurani-audio-offline-v1` agar tidak ikut dihapus saat versi service worker berubah.
 
 ## Fitur utama
 

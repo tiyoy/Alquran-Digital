@@ -1,5 +1,5 @@
 /* Lightweight app-shell service worker for the Next.js App Router. */
-const SW_VERSION = 'nurani-pwa-v20';
+const SW_VERSION = 'nurani-pwa-v21';
 const APP_SHELL_CACHE = `${SW_VERSION}-shell`;
 const API_CACHE = `${SW_VERSION}-api`;
 const RUNTIME_CACHE = `${SW_VERSION}-runtime`;
@@ -121,6 +121,9 @@ self.addEventListener('fetch', (event) => {
   }
   // Framework and SEO metadata routes must bypass runtime caching. Otherwise a
   // direct navigation to robots.txt/sitemap.xml could be cached as the app shell.
+  // Streamed audio downloads must stay network-only; never wrap/cache the large proxy response here.
+  if (url.origin === self.location.origin && url.pathname === '/api/audio-proxy') return;
+
   if (url.origin === self.location.origin && (
     url.pathname.startsWith('/_next/') ||
     url.pathname === '/robots.txt' ||

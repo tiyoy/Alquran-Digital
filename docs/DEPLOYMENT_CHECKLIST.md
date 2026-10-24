@@ -125,3 +125,9 @@ Pastikan `.env.local` atau secret pribadi tidak ikut di-commit. Endpoint `NEXT_P
 - [ ] Uji Reset khatam: konfirmasi membatalkan tidak mengubah data; konfirmasi menerima menghapus progres keseluruhan/harian dan mengembalikan target ke 30 hari.
 - [ ] Pastikan bookmark dan posisi bacaan terakhir tetap ada setelah reset khatam.
 - [ ] Pastikan service worker versi `nurani-pwa-v14` mengambil aset deployment terbaru.
+
+
+### Diagnostik unduhan audio v1.11.2
+- [ ] Request `GET /api/audio-proxy?src=...` mengembalikan `200` dan `Content-Type: audio/mpeg` untuk URL `cdn.equran.id/audio-full/...mp3`; request Range mengembalikan `206` dan `Content-Range` bila didukung CDN.
+- [ ] Permintaan audio proxy menggunakan byte-range 4 MiB untuk surah panjang bila CDN mendukung Range; file besar tidak dikumpulkan ke body di server.
+- [ ] Jika unduhan gagal, pesan HTTP dari proxy terlihat di toast dan log Network.

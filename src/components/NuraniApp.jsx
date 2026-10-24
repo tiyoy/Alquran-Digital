@@ -943,59 +943,127 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
         return;
       }
 
+      // Use Nurani's same-origin streaming proxy for the download only. Some audio
+      // CDN responses can play in <audio> but reject browser fetch because of CORS.
+      const proxyUrl = `/api/audio-proxy?src=${encodeURIComponent(src)}`;
       const priorTrack = offlineAudioTracks.find((track) => track.surahId === surahId);
       const totalWithoutThisSurah = totalOfflineAudioBytes(offlineAudioTracks.filter((track) => track.surahId !== surahId));
-      if (totalWithoutThisSurah >= MAX_TOTAL_AUDIO_BYTES) throw new Error('Batas total audio offline 200 MB tercapai. Hapus audio lain terlebih dahulu.');
-      const response = await fetch(src, { method: 'GET', mode: 'cors', credentials: 'omit', cache: 'no-store' });
-      if (!response.ok || response.status !== 200 || response.type === 'opaque') {
-        throw new Error('Sumber audio tidak mengizinkan unduhan lintas situs.');
-      }
-      const declaredLength = Number(response.headers.get('content-length')) || 0;
-      if (declaredLength > MAX_AUDIO_TRACK_BYTES) throw new Error('Ukuran audio melebihi batas 80 MB per surah.');
-      if (declaredLength && totalWithoutThisSurah + declaredLength > MAX_TOTAL_AUDIO_BYTES) throw new Error('Batas total audio offline 200 MB akan terlampaui. Hapus audio lain terlebih dahulu.');
-      try {
-        const estimate = await navigator.storage?.estimate?.();
-        const available = Number(estimate?.quota) - Number(estimate?.usage);
-        if (declaredLength && Number.isFinite(available) && available > 0 && available < declaredLength + 8 * 1024 * 1024) {
-          throw new Error('Ruang penyimpanan perangkat tidak cukup untuk audio ini.');
+      const ensureDeclaredAudioFits = async (byteLength) => {
+        if (byteLength > MAX_AUDIO_TRACK_BYTES) throw new Error('Ukuran audio melebihi batas 80 MB per surah.');
+        if (byteLength && totalWithoutThisSurah + byteLength > MAX_TOTAL_AUDIO_BYTES) {
+          throw new Error('Batas total audio offline 200 MB akan terlampaui. Hapus audio lain terlebih dahulu.');
         }
-      } catch (storageError) {
-        if (storageError instanceof Error && storageError.message.includes('Ruang penyimpanan')) throw storageError;
-      }
+        try {
+          const estimate = await navigator.storage?.estimate?.();
+          const available = Number(estimate?.quota) - Number(estimate?.usage);
+          if (byteLength && Number.isFinite(available) && available > 0 && available < byteLength + 8 * 1024 * 1024) {
+            throw new Error('Ruang penyimpanan perangkat tidak cukup untuk audio ini.');
+          }
+        } catch (storageError) {
+          if (storageError instanceof Error && storageError.message.includes('Ruang penyimpanan')) throw storageError;
+        }
+      };
+      const throwProxyResponseError = async (failedResponse) => {
+        let detail = '';
+        try {
+          const payload = await failedResponse.json();
+          detail = String(payload?.error || '').trim();
+        } catch { /* Use HTTP status when the proxy did not return JSON. */ }
+        throw new Error(`Audio proxy: ${detail || `Permintaan unduhan gagal (HTTP ${failedResponse.status}).`}`);
+      };
 
       let blob;
-      if (response.body?.getReader) {
-        const reader = response.body.getReader();
-        const chunks = [];
-        let loaded = 0;
-        let lastReported = 0;
-        try {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            loaded += value.byteLength;
-            if (loaded > MAX_AUDIO_TRACK_BYTES) {
-              await reader.cancel();
-              throw new Error('Ukuran audio melebihi batas 80 MB per surah.');
-            }
-            if (totalWithoutThisSurah + loaded > MAX_TOTAL_AUDIO_BYTES) {
-              await reader.cancel();
-              throw new Error('Batas total audio offline 200 MB akan terlampaui. Hapus audio lain terlebih dahulu.');
-            }
-            chunks.push(value);
-            if (loaded - lastReported >= 512 * 1024 || loaded === declaredLength) {
-              setAudioDownloadProgress({ surahId, loaded, total: declaredLength, title: audioSurah.namaLatin });
-              lastReported = loaded;
-            }
-          }
-        } finally {
-          reader.releaseLock?.();
+      let declaredLength = 0;
+      let audioMimeType = 'audio/mpeg';
+      const chunks = [];
+      // Use byte-range chunks when the CDN supports them. This keeps each Vercel
+      // response small and avoids timing out on long surahs; fallback is a streamed
+      // full response when the upstream ignores Range requests.
+      const probe = await fetch(proxyUrl, { method: 'GET', headers: { Range: 'bytes=0-0' }, cache: 'no-store' });
+      const contentRange = probe.headers.get('content-range') || '';
+      const rangeMatch = /^bytes\s+(\d+)-(\d+)\/(\d+)$/i.exec(contentRange);
+      if (probe.status !== 200 && probe.status !== 206) await throwProxyResponseError(probe);
+
+      if (probe.status === 206 && rangeMatch && Number(rangeMatch[1]) === 0 && Number(rangeMatch[2]) === 0) {
+        declaredLength = Number(rangeMatch[3]);
+        audioMimeType = probe.headers.get('content-type') || 'audio/mpeg';
+        if (!Number.isSafeInteger(declaredLength) || declaredLength < 1) {
+          await probe.body?.cancel().catch(() => {});
+          throw new Error('Sumber audio mengirim ukuran file yang tidak valid.');
         }
-        const responseType = String(response.headers.get('content-type') || '').toLowerCase();
-        const audioMimeType = responseType.startsWith('audio/') ? responseType.split(';')[0] : 'audio/mpeg';
-        blob = new Blob(chunks, { type: audioMimeType });
+        await ensureDeclaredAudioFits(declaredLength);
+        const firstByte = new Uint8Array(await probe.arrayBuffer());
+        if (firstByte.byteLength !== 1) throw new Error('Sumber audio mengirim potongan pertama yang tidak lengkap.');
+        chunks.push(firstByte);
+        let loaded = firstByte.byteLength;
+        setAudioDownloadProgress({ surahId, loaded, total: declaredLength, title: audioSurah.namaLatin });
+
+        const chunkBytes = 4 * 1024 * 1024; // Below Vercel's 4.5 MB non-streamed payload limit.
+        for (let startByte = 1; startByte < declaredLength; startByte += chunkBytes) {
+          const endByte = Math.min(declaredLength - 1, startByte + chunkBytes - 1);
+          const partResponse = await fetch(proxyUrl, {
+            method: 'GET',
+            headers: { Range: `bytes=${startByte}-${endByte}` },
+            cache: 'no-store'
+          });
+          if (partResponse.status !== 206) {
+            if (!partResponse.ok) await throwProxyResponseError(partResponse);
+            await partResponse.body?.cancel().catch(() => {});
+            throw new Error('Audio proxy: CDN tidak konsisten mengirim potongan audio. Coba unduh ulang.');
+          }
+          const partRange = /^bytes\s+(\d+)-(\d+)\/(\d+)$/i.exec(partResponse.headers.get('content-range') || '');
+          if (!partRange || Number(partRange[1]) !== startByte || Number(partRange[2]) !== endByte || Number(partRange[3]) !== declaredLength) {
+            await partResponse.body?.cancel().catch(() => {});
+            throw new Error('Audio proxy: respons potongan audio tidak cocok. Coba unduh ulang.');
+          }
+          const partBytes = new Uint8Array(await partResponse.arrayBuffer());
+          if (partBytes.byteLength !== endByte - startByte + 1) throw new Error('Audio proxy: potongan audio tidak lengkap. Coba unduh ulang.');
+          loaded += partBytes.byteLength;
+          if (totalWithoutThisSurah + loaded > MAX_TOTAL_AUDIO_BYTES) throw new Error('Batas total audio offline 200 MB akan terlampaui. Hapus audio lain terlebih dahulu.');
+          chunks.push(partBytes);
+          setAudioDownloadProgress({ surahId, loaded, total: declaredLength, title: audioSurah.namaLatin });
+        }
+        blob = new Blob(chunks, { type: audioMimeType.startsWith('audio/') ? audioMimeType.split(';')[0] : 'audio/mpeg' });
       } else {
-        blob = await response.blob();
+        // The host may ignore Range. Cancel the probe, then make one normal streaming
+        // request instead of accidentally buffering an entire file for the probe.
+        await probe.body?.cancel().catch(() => {});
+        const response = await fetch(proxyUrl, { method: 'GET', cache: 'no-store' });
+        if (!response.ok || response.status !== 200) await throwProxyResponseError(response);
+        declaredLength = Number(response.headers.get('content-length')) || 0;
+        audioMimeType = response.headers.get('content-type') || 'audio/mpeg';
+        await ensureDeclaredAudioFits(declaredLength);
+
+        if (response.body?.getReader) {
+          const reader = response.body.getReader();
+          let loaded = 0;
+          let lastReported = 0;
+          try {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              loaded += value.byteLength;
+              if (loaded > MAX_AUDIO_TRACK_BYTES) {
+                await reader.cancel();
+                throw new Error('Ukuran audio melebihi batas 80 MB per surah.');
+              }
+              if (totalWithoutThisSurah + loaded > MAX_TOTAL_AUDIO_BYTES) {
+                await reader.cancel();
+                throw new Error('Batas total audio offline 200 MB akan terlampaui. Hapus audio lain terlebih dahulu.');
+              }
+              chunks.push(value);
+              if (loaded - lastReported >= 512 * 1024 || loaded === declaredLength) {
+                setAudioDownloadProgress({ surahId, loaded, total: declaredLength, title: audioSurah.namaLatin });
+                lastReported = loaded;
+              }
+            }
+          } finally {
+            reader.releaseLock?.();
+          }
+          blob = new Blob(chunks, { type: audioMimeType.startsWith('audio/') ? audioMimeType.split(';')[0] : 'audio/mpeg' });
+        } else {
+          blob = await response.blob();
+        }
       }
       if (!blob.size) throw new Error('Sumber audio mengembalikan file kosong.');
       if (blob.size > MAX_AUDIO_TRACK_BYTES) throw new Error('Ukuran audio melebihi batas 80 MB per surah.');
@@ -1016,8 +1084,9 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
       showToast(`Audio ${audioSurah.namaLatin} tersimpan offline (${formatStorageBytes(blob.size)}).`);
     } catch (error) {
       const message = String(error?.message || '');
-      if (/Batas total|melebihi batas|Ruang penyimpanan|Metadata audio|metadata penuh|file kosong/i.test(message)) showToast(message);
-      else showToast('Unduhan audio gagal. Pastikan internet aktif dan sumber audio mengizinkan akses unduhan (CORS), lalu coba lagi.');
+      if (/^Audio proxy:/i.test(message)) showToast(message.replace(/^Audio proxy:\s*/i, ''));
+      else if (/Batas total|melebihi batas|Ruang penyimpanan|Metadata audio|metadata penuh|file kosong/i.test(message)) showToast(message);
+      else showToast('Unduhan audio gagal. Periksa Network pada browser untuk melihat apakah server proxy audio merespons, lalu coba lagi.');
     } finally {
       audioDownloadInFlightRef.current = false;
       setAudioDownloadProgress(null);
