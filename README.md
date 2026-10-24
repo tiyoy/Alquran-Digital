@@ -313,3 +313,10 @@ Katalog doa menormalkan urutan berdasarkan ID numerik yang tersedia dan memastik
 ## URL ayat yang bisa dibagikan
 
 Versi 1.6.0 menambahkan URL langsung untuk setiap ayat dengan format `/quran/<nomor>-<slug-surah>/<nomor-ayat>`, misalnya `/quran/1-al-fatihah/1`. Tombol **Bagikan ayat** akan membuka menu berbagi di perangkat yang mendukung Web Share API atau menyalin teks ayat beserta tautannya. Saat tautan dibuka, aplikasi akan menyorot ayat tujuan. Sitemap juga mencantumkan URL ayat.
+
+
+## Versi 1.6.1 — SEO ayat dan rendering server
+
+Route URL ayat sekarang mencoba memuat data surah pada server dan menyertakan teks Arab, Latin, serta terjemahan dalam HTML awal. Data surah yang berhasil diambil disimpan di cache Next.js selama 24 jam dan dikirim ke pembaca agar pengalaman berbagi ayat tetap sama. Jika API sumber sedang tidak tersedia, route tetap bisa dirender dengan metadata dan pembaca akan memakai mekanisme pemuatan data yang sudah ada sebagai fallback.
+
+Pemeriksaan deployment setelah rilis: buka URL ayat lalu gunakan **View Page Source**. Pastikan teks ayat terlihat pada HTML awal, metadata judul/canonical unik, tombol berbagi tetap berfungsi, dan ayat yang dituju tetap disorot. Jalankan `npm run lint` dan `npm run build` sebelum push ke produksi.

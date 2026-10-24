@@ -40,6 +40,7 @@ const PRAYERS = [
   { key: 'isya', label: 'Isya' }
 ];
 
+const EMPTY_INITIAL_VERSES = [];
 const TOTAL_QURAN_VERSES = 6236;
 const KHATAM_OPTIONS = [30, 60, 90];
 const AUDIO_REPEAT_OPTIONS = [
@@ -216,7 +217,7 @@ function findTafsirText(payload, verseNumber) {
   return typeof direct === 'string' ? direct : '';
 }
 
-export default function HomePage({ initialTab = 'home', initialSurahNumber = null, initialVerseNumber = null }) {
+export default function HomePage({ initialTab = 'home', initialSurahNumber = null, initialVerseNumber = null, initialVerseRows = EMPTY_INITIAL_VERSES }) {
   const safeInitialTab = VALID_TABS.includes(initialTab) ? initialTab : 'home';
   const parsedInitialSurahNumber = Number(initialSurahNumber);
   const safeInitialSurahNumber = Number.isInteger(parsedInitialSurahNumber) && parsedInitialSurahNumber >= 1 && parsedInitialSurahNumber <= 114
@@ -228,6 +229,7 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
     && parsedInitialVerseNumber >= 1 && parsedInitialVerseNumber <= Number(initialSurahMetadata.jumlahAyat)
     ? parsedInitialVerseNumber
     : null;
+  const safeInitialVerseRows = Array.isArray(initialVerseRows) ? initialVerseRows : [];
   const [activeTab, setActiveTab] = useState(safeInitialTab);
   const [theme, setTheme] = useState('light');
   const [dateLabel, setDateLabel] = useState('');
@@ -243,8 +245,8 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
   const [surahFilter, setSurahFilter] = useState('all');
   const [selectedSurah, setSelectedSurah] = useState(initialSurahMetadata);
   const [sharedVerseTarget] = useState(safeInitialVerseNumber);
-  const [verses, setVerses] = useState([]);
-  const [verseLoading, setVerseLoading] = useState(Boolean(initialSurahMetadata));
+  const [verses, setVerses] = useState(safeInitialVerseRows);
+  const [verseLoading, setVerseLoading] = useState(Boolean(initialSurahMetadata) && safeInitialVerseRows.length === 0);
   const [verseQuery, setVerseQuery] = useState('');
   const [arabicVisible, setArabicVisible] = useState(true);
   const [latinVisible, setLatinVisible] = useState(true);
@@ -273,7 +275,7 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
   const routeSyncInitializedRef = useRef(false);
   const initialSurahOpenedRef = useRef(null);
   const repeatCountRef = useRef(0);
-  const pendingJumpRef = useRef(null);
+  const pendingJumpRef = useRef(safeInitialVerseNumber || null);
 
   const [duas, setDuas] = useState(() => enforceBeforeMealDua(fallbackDuas.map(normalizeDua)));
   const [duaQuery, setDuaQuery] = useState('');
@@ -643,12 +645,19 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
       ? surahs.find((item) => Number(item.nomor) === surahValue) || fallbackSurahs[surahValue - 1]
       : surahValue;
     if (!surah) return;
-    setActiveTab('quran'); setSelectedSurah(surah); setVerses([]); setVerseLoading(true); setReaderSettingsOpen(false);
+    const canUseServerRows = Number(surah.nomor) === safeInitialSurahNumber && safeInitialVerseRows.length > 0;
+    setActiveTab('quran'); setSelectedSurah(surah); setVerses(canUseServerRows ? safeInitialVerseRows : []); setVerseLoading(!canUseServerRows); setReaderSettingsOpen(false);
     setJumpVerse(String(verseNumber || 1));
     pendingJumpRef.current = Number(verseNumber || 1);
     setLastRead({ surahId: Number(surah.nomor), surahName: surah.namaLatin, verse: Number(verseNumber || 1), updatedAt: Date.now() });
     markVerseRead(Number(surah.nomor), Number(verseNumber || 1));
     const cacheKey = `aq:verses:${surah.nomor}`;
+    if (canUseServerRows) {
+      // Persist the server-provided rows for the same offline behavior as API-loaded surahs.
+      writeLocal(cacheKey, safeInitialVerseRows);
+      setVerseLoading(false);
+      return;
+    }
     const cached = readLocal(cacheKey, null);
     if (Array.isArray(cached) && cached.length) setVerses(cached);
     try {
@@ -662,7 +671,7 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
     } finally {
       setVerseLoading(false);
     }
-  }, [surahs, showToast, markVerseRead]);
+  }, [surahs, showToast, markVerseRead, safeInitialSurahNumber, safeInitialVerseRows]);
 
   // Open a surah when a reader URL is loaded directly or refreshed. The ref avoids
   // re-fetching it when the catalogue metadata updates after the first render.

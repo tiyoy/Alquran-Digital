@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import NuraniApp from '@/components/NuraniApp';
 import { siteName, siteUrl } from '@/lib/site-config';
 import { getSurahFromSlug, getVersePath } from '@/lib/surah-routes';
+import { getSurahVerseRows } from '@/lib/server-quran';
 
 // Ayah routes are rendered on demand rather than prebuilding all 6,236 pages.
 export const dynamicParams = true;
@@ -55,5 +56,14 @@ export default async function VersePage({ params }) {
   const verseNumber = Number(verseParam);
   if (!surah || !Number.isInteger(verseNumber) || verseNumber < 1 || verseNumber > Number(surah.jumlahAyat)) notFound();
 
-  return <NuraniApp initialTab="quran" initialSurahNumber={surah.nomor} initialVerseNumber={verseNumber} />;
+  const initialVerseRows = await getSurahVerseRows(surah.nomor);
+
+  return (
+    <NuraniApp
+      initialTab="quran"
+      initialSurahNumber={surah.nomor}
+      initialVerseNumber={verseNumber}
+      initialVerseRows={initialVerseRows}
+    />
+  );
 }

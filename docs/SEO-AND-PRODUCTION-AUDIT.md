@@ -75,3 +75,27 @@ Konfigurasi route bersama berada di `src/lib/section-routes.js` dan dipakai oleh
 - Ketika tautan dibuka, aplikasi membuka surah terkait, menggulir ke ayat yang diminta, dan menyorot ayat tujuan.
 - Sitemap mencantumkan URL semua ayat (6.236 URL) agar crawler dapat menemukan halaman ayat.
 - Route ayat dirender saat diminta agar build tidak perlu memprerender seluruh 6.236 halaman.
+
+
+## Pembaruan v1.6.1 — Konten ayat dalam HTML awal
+
+### Temuan audit
+Route ayat sebelumnya mengirim metadata unik dari server, tetapi teks ayat diambil melalui `useEffect` di komponen client. Artinya, konten utama bergantung pada rendering JavaScript setelah halaman diterima browser. Google dapat merender JavaScript, tetapi konten utama yang sudah tersedia pada HTML awal lebih cepat diproses dan lebih kompatibel dengan crawler lain.
+
+### Perubahan
+- Route `src/app/quran/[slug]/[verse]/page.jsx` sekarang memuat data surah pada server melalui `src/lib/server-quran.js`.
+- Respons API yang berhasil dikembalikan oleh server diteruskan ke `NuraniApp` sebagai `initialVerseRows` sehingga pembaca dapat merender teks Arab, Latin, dan terjemahan dalam HTML pertama.
+- Data API di-cache dengan Next.js selama 24 jam per surah untuk mengurangi panggilan berulang ke sumber data.
+- Data awal juga disimpan ke cache lokal perangkat, mempertahankan mekanisme offline yang sudah digunakan. Jika permintaan server gagal, aplikasi tetap menggunakan jalur pemuatan data client yang lama.
+- Target ayat awal tetap ditandai dan dijadwalkan untuk scroll setelah hydration.
+
+### Pengujian setelah deployment
+1. Buka `/quran/1-al-fatihah/1` lalu klik kanan → **View Page Source**. Cari teks Arab Al-Fatihah, teks Latin, dan terjemahannya pada HTML awal.
+2. Pastikan judul dan canonical berbeda untuk `/quran/1-al-fatihah/1` dan `/quran/1-al-fatihah/2`.
+3. Pastikan ayat yang dibagikan tetap tersorot dan terlihat setelah halaman selesai dimuat.
+4. Uji ketika jaringan normal dan saat API sumber gagal; fallback client tetap harus menampilkan status loading atau pesan yang sudah tersedia.
+5. Jalankan `npm run lint` dan `npm run build` sebelum push. Dalam lingkungan penyusunan patch ini, dependensi tidak tersedia secara lokal dan akses jaringan tidak tersedia, jadi build produksi penuh belum dapat diverifikasi di sini.
+
+### Referensi
+- Google Search Central, JavaScript SEO basics: https://developers.google.com/search/docs/crawling-indexing/javascript/javascript-seo-basics
+- Next.js App Router, `sitemap.js`: https://nextjs.org/docs/app/api-reference/file-conventions/metadata/sitemap
