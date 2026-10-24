@@ -14,6 +14,7 @@ export const LOCAL_BACKUP_KEYS = Object.freeze([
   'aq:reading-days',
   'aq:khatam-days',
   'aq:audio-repeat',
+  'aq:audio-speed',
   'aq:favorite-asma',
   'aq:reader-prefs'
 ]);
@@ -28,6 +29,7 @@ export const LOCAL_BACKUP_LABELS = Object.freeze({
   'aq:reading-days': 'Riwayat bacaan harian',
   'aq:khatam-days': 'Target khatam',
   'aq:audio-repeat': 'Pengulangan audio',
+  'aq:audio-speed': 'Kecepatan audio',
   'aq:favorite-asma': 'Favorit Asmaul Husna',
   'aq:reader-prefs': 'Pengaturan pembaca'
 });
@@ -132,6 +134,10 @@ function normalizeBackupValue(key, value) {
     }
     case 'aq:audio-repeat':
       return ['off', '3', '5', '10', 'infinite'].includes(value) ? { valid: true, value } : { valid: false };
+    case 'aq:audio-speed': {
+      const speed = Number(value);
+      return [0.75, 0.9, 1, 1.1, 1.25, 1.5].includes(speed) ? { valid: true, value: speed } : { valid: false };
+    }
     case 'aq:favorite-asma': {
       const rows = uniqueIntegers(value, 1, 99, 99);
       return rows ? { valid: true, value: rows } : { valid: false };
@@ -145,7 +151,7 @@ function normalizeBackupValue(key, value) {
   }
 }
 
-export function createLocalBackup(storage, appVersion = '1.11.0', exportedAt = new Date().toISOString()) {
+export function createLocalBackup(storage, appVersion = '1.14.0', exportedAt = new Date().toISOString()) {
   const data = {};
   LOCAL_BACKUP_KEYS.forEach((key) => {
     const raw = storage.getItem(key);
@@ -209,6 +215,7 @@ export function describeLocalBackupValue(key, value) {
   if (key === 'aq:last-read') return value ? `${value.surahName}, ayat ${value.verse}` : 'belum ada';
   if (key === 'aq:khatam-days') return `${value} hari`;
   if (key === 'aq:audio-repeat') return value === 'off' ? 'mati' : value === 'infinite' ? 'tanpa batas' : `${value}×`;
+  if (key === 'aq:audio-speed') return `${Number(value).toLocaleString('id-ID')}×`;
   if (key === 'aq:theme') return value === 'dark' ? 'gelap' : 'terang';
   if (key === 'aq:reader-prefs') return 'tersimpan';
   return '';

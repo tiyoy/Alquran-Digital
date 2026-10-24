@@ -15,7 +15,7 @@
   <img alt="Tailwind CSS" src="https://img.shields.io/badge/Tailwind_CSS-v3-06B6D4?logo=tailwindcss&logoColor=white" />
   <img alt="PWA" src="https://img.shields.io/badge/PWA-Installable-5A0FC8?logo=pwa&logoColor=white" />
   <img alt="Bahasa Indonesia" src="https://img.shields.io/badge/Bahasa-Indonesia-059669" />
-  <img alt="Versi aplikasi 1.13.0" src="https://img.shields.io/badge/Versi-1.13.0-059669" />
+  <img alt="Versi aplikasi 1.14.0" src="https://img.shields.io/badge/Versi-1.14.0-059669" />
 </p>
 
 <p align="center">
@@ -46,7 +46,7 @@ Setiap doa harian juga memiliki URL individual, misalnya `/doa/1-doa-sebelum-mak
 
 Next.js membangun 114 route dari metadata surah lokal. Setiap route menyediakan title, deskripsi, canonical URL, Open Graph, dan Twitter Card khusus. Daftar surah menampilkan anchor HTML yang bisa diikuti crawler, sedangkan klik normal tetap membuka pembaca di dalam aplikasi tanpa reload.
 
-## Fitur terbaru — v1.13.1
+## Fitur terbaru — v1.14.0
 
 - URL detail individual untuk doa harian dengan pola `/doa/{id}-{slug-judul}`, contoh `/doa/1-doa-sebelum-makan`.
 - Setiap kartu doa memiliki aksi **Bagikan doa** dan **Buka doa**.
@@ -65,7 +65,7 @@ Next.js membangun 114 route dari metadata surah lokal. Setiap route menyediakan 
 - Pengaturan → Kelola konten offline menampilkan ukuran, qari, status cache audio, serta aksi hapus per file atau semua audio tanpa menghapus cache ayat dan data pribadi.
 - **Mode hemat audio per ayat**: gunakan ikon unduh pada setiap kartu ayat untuk menyimpan audio ayat yang dibutuhkan tanpa mengunduh satu surah penuh. Pemutaran ayat memakai cache lokal saat offline jika file tersebut telah diunduh. Audio penuh dan audio per ayat mempunyai entri pengelolaan terpisah; batas tetap 80 MiB per track dan 200 MiB total.
 - Proxy audio same-origin mendukung path MP3 penuh dan per ayat dari namespace audio resmi `cdn.equran.id`; sumber di luar host/path yang diizinkan ditolak.
-- Service worker kini `nurani-pwa-v23`, sementara nama cache audio offline tetap stabil antardeployment.
+- Service worker kini `nurani-pwa-v25`, sementara nama cache audio offline tetap stabil antardeployment.
 
 Catatan tadabbur bersifat lokal per browser/perangkat; belum ada akun atau sinkronisasi cloud. Sebelum deployment, jalankan `npm run lint` dan `npm run build`. Detail doa dari API dicache di server selama 24 jam; jika API tidak tersedia, lima doa cadangan yang dibundel tetap bisa dibuka.
 
@@ -378,3 +378,15 @@ Pemeriksaan deployment setelah rilis: buka URL ayat lalu gunakan **View Page Sou
 ## Unduh audio per ayat (v1.13.1)
 
 Setiap kartu ayat memiliki tombol berlabel **Unduh audio ayat**. Jika URL audio tidak ikut tersimpan dalam cache lokal, Nurani akan memuat ulang metadata surah dari EQuran dan mencoba kembali.
+
+
+## Nurani v1.14.0 — Kontrol Kecepatan Audio
+
+Lihat `PATCH-NOTES-v1.14.0.md` untuk kontrol playback rate, persistensi lokal, dan integrasi backup. Jalankan `npm run lint` dan `npm run build` sebelum deployment.
+
+### Kontrol kecepatan murottal — v1.14.0
+
+- Tambahkan pilihan kecepatan 0,75×; 0,9×; 1×; 1,1×; 1,25×; dan 1,5× pada toolbar pembaca serta pemutar audio yang diperluas.
+- Kecepatan diterapkan ke audio surah penuh, ayat, dan file yang diputar dari cache offline. Pitch dipertahankan bila properti browser mendukungnya.
+- Pengaturan disimpan sebagai `aq:audio-speed` dan disertakan dalam file backup lokal dengan validasi nilai yang diizinkan.
+- Service worker diperbarui ke `nurani-pwa-v25`; cache audio khusus tidak dibersihkan oleh pergantian versi app shell.

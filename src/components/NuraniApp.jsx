@@ -5,7 +5,7 @@ import Link from 'next/link';
 import {
   ArrowRight, AudioLines, Bookmark, BookMarked, BookOpen, CalendarDays, Check,
   ChevronDown, ChevronLeft, ChevronRight, Clock3, Copy, Download, HandHeart,
-  Headphones, Heart, Home, Info, ListFilter, LoaderCircle, MapPin, Minus, Moon,
+  Headphones, Heart, Home, Info, ListFilter, LoaderCircle, MapPin, Minus, Moon, Gauge,
   MoreHorizontal, Pause, Play, Plus, RefreshCw, Search, Settings2, ShieldCheck,
   Share2, SlidersHorizontal, Sparkles, Sun, Wifi, WifiOff, X, Repeat, Target, StickyNote, PencilLine, Trash2, Upload
 } from 'lucide-react';
@@ -73,6 +73,14 @@ const AUDIO_REPEAT_OPTIONS = [
   { value: '5', label: '5×' },
   { value: '10', label: '10×' },
   { value: 'infinite', label: 'Tanpa batas' }
+];
+const AUDIO_SPEED_OPTIONS = [
+  { value: 0.75, label: '0,75×' },
+  { value: 0.9, label: '0,9×' },
+  { value: 1, label: 'Normal (1×)' },
+  { value: 1.1, label: '1,1×' },
+  { value: 1.25, label: '1,25×' },
+  { value: 1.5, label: '1,5×' }
 ];
 function jakartaDateKey(date = new Date()) {
   const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(date);
@@ -242,6 +250,7 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
   const [audioPlaying, setAudioPlaying] = useState(false);
   const [audioExpanded, setAudioExpanded] = useState(false);
   const [audioRepeat, setAudioRepeat] = useState('off');
+  const [audioSpeed, setAudioSpeed] = useState(1);
   const audioRef = useRef(null);
   const audioObjectUrlRef = useRef(null);
   const routeSyncInitializedRef = useRef(false);
@@ -370,6 +379,8 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
     void inspectOfflineAudioCache(savedOfflineAudioTracks).then(setOfflineAudioStats).catch(() => {});
     const savedAudioRepeat = readLocal('aq:audio-repeat', 'off');
     setAudioRepeat(AUDIO_REPEAT_OPTIONS.some((option) => option.value === savedAudioRepeat) ? savedAudioRepeat : 'off');
+    const savedAudioSpeed = Number(readLocal('aq:audio-speed', 1));
+    setAudioSpeed(AUDIO_SPEED_OPTIONS.some((option) => option.value === savedAudioSpeed) ? savedAudioSpeed : 1);
     setFavoriteAsma(readLocal('aq:favorite-asma', []));
     const prefs = readLocal('aq:reader-prefs', null);
     if (prefs) {
@@ -634,6 +645,9 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
     writeLocal('aq:audio-repeat', audioRepeat);
   }, [audioRepeat]);
   useEffect(() => {
+    writeLocal('aq:audio-speed', audioSpeed);
+  }, [audioSpeed]);
+  useEffect(() => {
     writeLocal('aq:favorite-asma', favoriteAsma);
   }, [favoriteAsma]);
   useEffect(() => {
@@ -648,6 +662,18 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
       showToast('Audio tidak dapat diputar. Periksa koneksi atau sumber audio.');
     });
   }, [audioInfo?.src, showToast]);
+  useEffect(() => {
+    const element = audioRef.current;
+    if (!element) return;
+    // Preserve the reciter's pitch while adjusting the playback rate where supported.
+    try {
+      element.defaultPlaybackRate = audioSpeed;
+      element.playbackRate = audioSpeed;
+      if ('preservesPitch' in element) element.preservesPitch = true;
+      else if ('mozPreservesPitch' in element) element.mozPreservesPitch = true;
+      else if ('webkitPreservesPitch' in element) element.webkitPreservesPitch = true;
+    } catch { /* Some embedded browsers may not allow rate changes. */ }
+  }, [audioSpeed, audioInfo?.src]);
 
   useEffect(() => () => {
     const currentUrl = audioObjectUrlRef.current;
@@ -1597,7 +1623,7 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
   };
   const exportLocalBackup = () => {
     try {
-      const backup = createLocalBackup(window.localStorage, '1.11.0');
+      const backup = createLocalBackup(window.localStorage, '1.14.0');
       const entryCount = Object.keys(backup.data).length;
       if (!entryCount) {
         showToast('Belum ada data Nurani yang bisa dicadangkan.');
@@ -1823,6 +1849,7 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
       <div className="reader-tool-row">
         <div className="reciter-control"><Headphones size={16} /><select value={qariIndex} onChange={(event) => setQariIndex(Number(event.target.value))} aria-label="Pilih qari">{QARIS.map((qari, index) => <option value={index} key={qari}>{qari}</option>)}</select><ChevronDown size={15} /></div>
         <label className="repeat-control"><Repeat size={16} /><span>Ulang ayat</span><select value={audioRepeat} onChange={(event) => { setAudioRepeat(event.target.value); repeatCountRef.current = 0; }} aria-label="Atur pengulangan ayat">{AUDIO_REPEAT_OPTIONS.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}</select></label>
+        <label className="speed-control"><Gauge size={16} /><span>Kecepatan</span><select value={audioSpeed} onChange={(event) => setAudioSpeed(Number(event.target.value))} aria-label="Atur kecepatan audio murottal">{AUDIO_SPEED_OPTIONS.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}</select></label>
         <form className="jump-form" onSubmit={(event) => { event.preventDefault(); const n = Math.min(Math.max(Number(jumpVerse) || 1, 1), verses.length || Number(selectedSurah?.jumlahAyat) || 1); pendingJumpRef.current = n; document.getElementById(`verse-${selectedSurah?.nomor}-${n}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }}><label htmlFor="jump-verse">Ayat</label><input id="jump-verse" type="number" min="1" max={selectedSurah?.jumlahAyat || 999} value={jumpVerse} onChange={(event) => setJumpVerse(event.target.value)} /><button type="submit" aria-label="Lompat ke ayat"><ArrowRight size={16} /></button></form>
       </div>
       {verses.length > 0 && <p className="verse-audio-download-tip"><Download size={14} /><span><strong>Mode hemat penyimpanan:</strong> gunakan tombol <strong>Unduh audio ayat</strong> yang terlihat pada setiap kartu untuk menyimpan satu ayat saja. Tombol <strong>Unduh audio</strong> di atas menyimpan satu surah penuh.</span></p>}
@@ -1962,7 +1989,7 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
 
       {audioInfo && <div className={`sticky-audio ${audioExpanded ? 'audio-expanded' : ''}`}>
         <audio ref={audioRef} src={audioInfo.src} onEnded={handleAudioEnded} onPause={() => setAudioPlaying(false)} onPlay={() => setAudioPlaying(true)} preload="none" />
-        {audioExpanded && <div className="audio-expanded-body"><div className="audio-equalizer"><AudioLines size={20} /></div><div><strong>{audioInfo.title}</strong><span>{audioInfo.subtitle}</span></div><button className="icon-button" onClick={() => setAudioExpanded(false)} aria-label="Ciutkan pemutar"><ChevronDown size={18} /></button></div>}
+        {audioExpanded && <><div className="audio-expanded-body"><div className="audio-equalizer"><AudioLines size={20} /></div><div><strong>{audioInfo.title}</strong><span>{audioInfo.subtitle}</span></div><button className="icon-button" onClick={() => setAudioExpanded(false)} aria-label="Ciutkan pemutar"><ChevronDown size={18} /></button></div><div className="audio-expanded-controls"><label className="speed-control sticky-speed-control"><Gauge size={16} /><span>Kecepatan audio</span><select value={audioSpeed} onChange={(event) => setAudioSpeed(Number(event.target.value))} aria-label="Atur kecepatan audio dari pemutar">{AUDIO_SPEED_OPTIONS.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}</select></label><small>Kecepatan tersimpan di perangkat ini. Nada suara dipertahankan jika didukung browser.</small></div></>}
         <div className="audio-track-art"><AudioLines size={19} /></div><div className="audio-track-info"><strong>{audioInfo.title}</strong><span>{audioInfo.subtitle}</span></div><button className="icon-button audio-dismiss" aria-label="Tutup pemutar" onClick={() => { audioRef.current?.pause(); releaseAudioObjectUrl(); setAudioInfo(null); setAudioPlaying(false); }}><X size={17} /></button><button className="audio-play-button" aria-label={audioPlaying ? 'Jeda audio' : 'Putar audio'} onClick={toggleAudioPlayback}>{audioPlaying ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" />}</button><button className="icon-button audio-more" aria-label="Besarkan pemutar" onClick={() => setAudioExpanded((value) => !value)}>{audioExpanded ? <ChevronDown size={17} /> : <MoreHorizontal size={17} />}</button>
       </div>}
 

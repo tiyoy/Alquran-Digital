@@ -10,6 +10,7 @@ Fitur ini mengekspor data personal berikut dari browser:
 - Ayat yang ditandai selesai dan riwayat bacaan harian.
 - Target khatam 30, 60, atau 90 hari.
 - Pengaturan pengulangan audio.
+- Kecepatan audio murottal (0,75×, 0,9×, 1×, 1,1×, 1,25×, dan 1,5×).
 - Favorit Asmaul Husna.
 - Preferensi tampilan pembaca: visibilitas teks, ukuran font, dan pilihan qari.
 
@@ -22,7 +23,7 @@ File JSON memiliki bentuk umum:
 {
   "format": "nurani-local-backup",
   "schemaVersion": 1,
-  "appVersion": "1.11.0",
+  "appVersion": "1.14.0",
   "exportedAt": "2026-10-24T00:00:00.000Z",
   "data": {
     "aq:theme": "light",
