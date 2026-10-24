@@ -20,7 +20,7 @@ Panel **Kelola konten offline** berada di Pengaturan. Panel ini menunjukkan:
 - Penyimpanan data ayat utama menggunakan localStorage agar reader yang berjalan dapat memakainya tanpa jaringan. Cache HTML rute surah/ayat oleh service worker merupakan best-effort; bila gagal, pembaca tetap dapat memakai cache ayat lokal setelah aplikasi shell terbuka.
 - Storage API melaporkan pemakaian tingkat origin/browser, bukan pemakaian Nurani saja. Nilainya berupa estimasi dan tidak tersedia di semua browser.
 - Cache browser dapat dihapus oleh pengguna atau dievakuasi browser bila ruang perangkat terbatas.
-- Audio murottal tidak diunduh dan tidak dimasukkan ke dalam cache offline oleh perubahan ini.
+- Pada versi v1.10.0 audio murottal belum diunduh; pengunduhan audio offline ditambahkan pada v1.11.0 di bawah.
 
 ## Pemeriksaan manual sebelum deployment
 
@@ -30,3 +30,8 @@ Panel **Kelola konten offline** berada di Pengaturan. Panel ini menunjukkan:
 4. Hapus satu surah dan pastikan bookmark, catatan, progres, serta posisi bacaan tidak hilang.
 5. Pilih **Hapus semua cache ayat**, pastikan daftar offline kosong, lalu pastikan data pribadi tetap tersimpan.
 6. Periksa konsol browser dan jalankan `npm run lint` serta `npm run build` sebelum deploy.
+
+
+## Audio murottal offline — v1.11.0
+
+Audio surah penuh disimpan dalam Cache API terpisah bernama `nurani-audio-offline-v1`. Pengunduhan memerlukan internet dan dukungan CORS dari host audio; streaming audio biasa tetap mengikuti sumber yang disediakan katalog surah. Batas file adalah 80 MB dan total audio 200 MB. Panel Pengaturan memeriksa metadata `aq:offline-audios` terhadap file nyata di Cache API, dan menyediakan penghapusan satu track atau semua audio. Audio tidak masuk ke backup JSON dan tidak dihapus saat **Hapus semua cache ayat** ditekan.

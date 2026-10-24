@@ -15,7 +15,7 @@
   <img alt="Tailwind CSS" src="https://img.shields.io/badge/Tailwind_CSS-v3-06B6D4?logo=tailwindcss&logoColor=white" />
   <img alt="PWA" src="https://img.shields.io/badge/PWA-Installable-5A0FC8?logo=pwa&logoColor=white" />
   <img alt="Bahasa Indonesia" src="https://img.shields.io/badge/Bahasa-Indonesia-059669" />
-  <img alt="Versi aplikasi 1.10.0" src="https://img.shields.io/badge/Versi-1.10.0-059669" />
+  <img alt="Versi aplikasi 1.11.0" src="https://img.shields.io/badge/Versi-1.11.0-059669" />
 </p>
 
 <p align="center">
@@ -46,7 +46,7 @@ Setiap doa harian juga memiliki URL individual, misalnya `/doa/1-doa-sebelum-mak
 
 Next.js membangun 114 route dari metadata surah lokal. Setiap route menyediakan title, deskripsi, canonical URL, Open Graph, dan Twitter Card khusus. Daftar surah menampilkan anchor HTML yang bisa diikuti crawler, sedangkan klik normal tetap membuka pembaca di dalam aplikasi tanpa reload.
 
-## Fitur terbaru — v1.10.0
+## Fitur terbaru — v1.11.0
 
 - URL detail individual untuk doa harian dengan pola `/doa/{id}-{slug-judul}`, contoh `/doa/1-doa-sebelum-makan`.
 - Setiap kartu doa memiliki aksi **Bagikan doa** dan **Buka doa**.
@@ -58,12 +58,18 @@ Next.js membangun 114 route dari metadata surah lokal. Setiap route menyediakan 
 - Catatan dibatasi 2.000 karakter per ayat dan 500 entri, disimpan di `localStorage`, serta tidak ikut terhapus saat progres khatam direset.
 - Fitur **Cadangkan & Pulihkan Data** untuk mengekspor dan mengimpor bookmark, catatan tadabbur, progres tilawah, posisi bacaan terakhir, target khatam, favorit Asmaul Husna, serta preferensi pembaca dalam file JSON tervalidasi.
 - File cadangan dibatasi 5 MB, hanya menerima key data Nurani yang diizinkan, dan tidak menyertakan cache katalog surah/doa maupun data surah offline yang khusus untuk perangkat. Kategori yang ada pada file menggantikan kategori sejenis; kategori yang tidak ada dibiarkan tetap.
-- Service worker diperbarui menjadi `nurani-pwa-v18`.
+- Service worker diperbarui menjadi `nurani-pwa-v19`.
 - Menambahkan pengelola konten offline: jumlah cache surah, estimasi penyimpanan, daftar surah tersimpan, hapus per surah, dan bersihkan cache ayat tanpa menghapus bookmark/catatan/progres.
 - Tombol Simpan offline mencoba menyimpan rute pembaca surah dan ayat untuk navigasi langsung ketika jaringan tidak tersedia.
+- Unduhan audio murottal per surah: pilih qari, lihat progres unduhan, dan simpan audio hingga 80 MB per file dengan batas total 200 MB. Audio dapat diputar dari cache ketika offline.
+- Pengaturan → Kelola konten offline menampilkan ukuran, qari, status cache audio, serta aksi hapus per file atau semua audio tanpa menghapus cache ayat dan data pribadi.
 
 Catatan tadabbur bersifat lokal per browser/perangkat; belum ada akun atau sinkronisasi cloud. Sebelum deployment, jalankan `npm run lint` dan `npm run build`. Detail doa dari API dicache di server selama 24 jam; jika API tidak tersedia, lima doa cadangan yang dibundel tetap bisa dibuka.
 
+
+### Unduhan audio murottal — v1.11.0
+
+Pada halaman pembaca, pilih qari lalu tekan **Unduh audio**. Aplikasi menampilkan progres, menyimpan satu track untuk setiap surah, dan membatasi satu file hingga 80 MB serta total cache hingga 200 MB. Sumber audio harus mengizinkan permintaan unduhan lintas situs (CORS); jika tidak, audio streaming biasa tetap tersedia tetapi file tidak bisa disimpan untuk offline. Buka Pengaturan → Kelola konten offline untuk memeriksa ukuran file dan menghapus satu audio atau seluruh audio. Berkas tersimpan secara lokal dan tidak masuk ke file backup JSON. Cache audio memakai nama stabil `nurani-audio-offline-v1` agar tidak ikut dihapus saat versi service worker berubah.
 
 ## Fitur utama
 
@@ -93,6 +99,7 @@ Catatan tadabbur bersifat lokal per browser/perangkat; belum ada akun atau sinkr
 - **Penyimpanan di perangkat:** `localStorage` untuk preferensi, bookmark, riwayat, dan data yang pernah dimuat.
 - **PWA:** Web App Manifest dan service worker khusus di folder `public/`.
 - **Data Al-Qur'an, doa, dan jadwal shalat:** API publik eksternal; aplikasi tidak memerlukan API key untuk endpoint bawaan.
+
 
 ## Mulai di lokal
 
@@ -304,7 +311,7 @@ Kontennya adalah `google-site-verification: google47c4b90e54eddd18.html`. Jika U
 
 Pendekatan design-system-first dan catatan audit UI/UX ada di [`design-system/MASTER.md`](./design-system/MASTER.md) dan [`design-system/UI_UX_AUDIT.md`](./design-system/UI_UX_AUDIT.md). PRD asli tersedia di [`docs/PRD.md`](./docs/PRD.md).
 
-Fitur lanjutan yang masih disiapkan: pencarian ayat berdasarkan topik, catatan tadabbur, warna tajwid otomatis yang bersumber dari data tepercaya, kompas kiblat, pengingat terjadwal, sinkronisasi antarperangkat, dan unduhan audio offline.
+Fitur lanjutan yang masih disiapkan: pencarian ayat berdasarkan topik, warna tajwid otomatis yang bersumber dari data tepercaya, kompas kiblat, pengingat terjadwal, dan sinkronisasi antarperangkat.
 
 ## Kontribusi
 

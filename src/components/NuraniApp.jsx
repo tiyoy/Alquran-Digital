@@ -21,6 +21,10 @@ import {
 } from '@/lib/local-backup';
 import { formatStorageBytes, inspectOfflineStorage, normalizeOfflineSurahIds } from '@/lib/offline-storage';
 import {
+  MAX_AUDIO_TRACK_BYTES, MAX_TOTAL_AUDIO_BYTES, OFFLINE_AUDIO_CACHE_NAME, OFFLINE_AUDIO_STORAGE_KEY,
+  inspectOfflineAudioCache, normalizeOfflineAudioTracks, totalOfflineAudioBytes, upsertOfflineAudioTrack
+} from '@/lib/offline-audio';
+import {
   chooseAudio, cleanArabicText, fetchAllPrayerCities, fetchDuas, fetchPrayerCity, fetchPrayerSchedule,
   fetchQuran, firstArray, normalizeSurah, normalizeVerse, unwrapPayload
 } from '@/lib/api';
@@ -221,6 +225,10 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
   const [offlineSurahs, setOfflineSurahs] = useState([]);
   const [offlineStorageStats, setOfflineStorageStats] = useState({ cachedSurahIds: [], cachedVerseCounts: {}, cachedSurahBytes: {}, cachedVerseBytes: 0, pinnedSurahIds: [], pinnedBytes: 0, missingPinnedSurahIds: [], originUsage: null, originQuota: null });
   const [offlineManagerExpanded, setOfflineManagerExpanded] = useState(false);
+  const [offlineAudioTracks, setOfflineAudioTracks] = useState([]);
+  const [offlineAudioStats, setOfflineAudioStats] = useState({ cachedSrcs: [], missingSrcs: [], cachedBytes: 0 });
+  const [audioDownloadProgress, setAudioDownloadProgress] = useState(null);
+  const audioDownloadInFlightRef = useRef(false);
   const [tafsirModal, setTafsirModal] = useState(null);
   const [tafsirLoading, setTafsirLoading] = useState(false);
   const [jumpVerse, setJumpVerse] = useState('');
@@ -230,6 +238,7 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
   const [audioExpanded, setAudioExpanded] = useState(false);
   const [audioRepeat, setAudioRepeat] = useState('off');
   const audioRef = useRef(null);
+  const audioObjectUrlRef = useRef(null);
   const routeSyncInitializedRef = useRef(false);
   const initialSurahOpenedRef = useRef(null);
   const repeatCountRef = useRef(0);
@@ -286,6 +295,18 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
     } catch { /* Storage estimates are optional and browser-dependent. */ }
     setOfflineStorageStats({ ...details, originUsage, originQuota });
   }, []);
+  const refreshOfflineAudioStats = useCallback(async (tracks = offlineAudioTracks) => {
+    const details = await inspectOfflineAudioCache(tracks);
+    setOfflineAudioStats(details);
+    return details;
+  }, [offlineAudioTracks]);
+
+  const releaseAudioObjectUrl = () => {
+    const currentUrl = audioObjectUrlRef.current;
+    if (!currentUrl) return;
+    try { URL.revokeObjectURL(currentUrl); } catch { /* Object URL cleanup is best-effort. */ }
+    audioObjectUrlRef.current = null;
+  };
 
   const markVerseRead = useCallback((surahNumber, verseNumber) => {
     const surahId = Number(surahNumber);
@@ -339,6 +360,9 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
     setKhatamDays(KHATAM_OPTIONS.includes(savedKhatamDays) ? savedKhatamDays : 30);
     const savedOfflineSurahs = normalizeOfflineSurahIds(readLocal('aq:offline-surahs', []));
     setOfflineSurahs(savedOfflineSurahs);
+    const savedOfflineAudioTracks = normalizeOfflineAudioTracks(readLocal(OFFLINE_AUDIO_STORAGE_KEY, []));
+    setOfflineAudioTracks(savedOfflineAudioTracks);
+    void inspectOfflineAudioCache(savedOfflineAudioTracks).then(setOfflineAudioStats).catch(() => {});
     const savedAudioRepeat = readLocal('aq:audio-repeat', 'off');
     setAudioRepeat(AUDIO_REPEAT_OPTIONS.some((option) => option.value === savedAudioRepeat) ? savedAudioRepeat : 'off');
     setFavoriteAsma(readLocal('aq:favorite-asma', []));
@@ -596,8 +620,11 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
     writeLocal('aq:offline-surahs', offlineSurahs);
   }, [offlineSurahs]);
   useEffect(() => {
-    if (settingsOpen) void refreshOfflineStorage();
-  }, [settingsOpen, offlineSurahs, refreshOfflineStorage]);
+    if (settingsOpen) {
+      void refreshOfflineStorage();
+      if (offlineManagerExpanded) void refreshOfflineAudioStats();
+    }
+  }, [settingsOpen, offlineSurahs, offlineManagerExpanded, offlineAudioTracks, refreshOfflineStorage, refreshOfflineAudioStats]);
   useEffect(() => {
     writeLocal('aq:audio-repeat', audioRepeat);
   }, [audioRepeat]);
@@ -616,6 +643,14 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
       showToast('Audio tidak dapat diputar. Periksa koneksi atau sumber audio.');
     });
   }, [audioInfo?.src, showToast]);
+
+  useEffect(() => () => {
+    const currentUrl = audioObjectUrlRef.current;
+    if (currentUrl) {
+      try { URL.revokeObjectURL(currentUrl); } catch { /* Best-effort object URL cleanup. */ }
+      audioObjectUrlRef.current = null;
+    }
+  }, []);
 
   const upcomingPrayer = useMemo(() => getUpcomingPrayer(prayerSchedule, prayerTimezone), [prayerSchedule, prayerTimezone, clockTick]);
   const filteredSurahs = useMemo(() => {
@@ -807,17 +842,193 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
   const playVerse = (verse, index) => {
     const src = chooseAudio(verse.audio, qariIndex);
     if (!src) { showToast('Audio per ayat belum disediakan oleh sumber untuk pilihan ini.'); return; }
+    audioRef.current?.pause();
+    releaseAudioObjectUrl();
     repeatCountRef.current = 0;
-    setAudioInfo({ src, title: `${selectedSurah?.namaLatin || 'Al-Qur’an'} · Ayat ${verse.nomorAyat}`, subtitle: QARIS[qariIndex], trackType: 'verse', verseIndex: index, surahNumber: selectedSurah?.nomor });
+    setAudioInfo({ src, originalSrc: src, title: `${selectedSurah?.namaLatin || 'Al-Qur’an'} · Ayat ${verse.nomorAyat}`, subtitle: QARIS[qariIndex], trackType: 'verse', verseIndex: index, surahNumber: selectedSurah?.nomor });
     markVerseRead(Number(selectedSurah?.nomor), Number(verse.nomorAyat));
     window.setTimeout(() => document.getElementById(`verse-${selectedSurah?.nomor}-${verse.nomorAyat}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100);
   };
-  const playFullSurah = () => {
+  const playFullSurah = async () => {
     if (!selectedSurah) return;
     const src = chooseAudio(selectedSurah.audioFull, qariIndex);
     if (!src) { showToast('Audio penuh surah belum tersedia pada data yang diterima.'); return; }
-    setAudioInfo({ src, title: selectedSurah.namaLatin, subtitle: `Murottal · ${QARIS[qariIndex]}`, trackType: 'full', surahNumber: selectedSurah.nomor, verseIndex: 0 });
+    audioRef.current?.pause();
+    releaseAudioObjectUrl();
+    let playableSrc = src;
+    if (!navigator.onLine) {
+      try {
+        const cache = await caches.open(OFFLINE_AUDIO_CACHE_NAME);
+        const cachedResponse = await cache.match(src);
+        if (!cachedResponse) {
+          showToast('Audio surah ini belum diunduh. Hubungkan internet untuk menyimpannya terlebih dahulu.');
+          return;
+        }
+        const blob = await cachedResponse.blob();
+        if (!blob.size) throw new Error('Cache audio kosong.');
+        playableSrc = URL.createObjectURL(blob);
+        audioObjectUrlRef.current = playableSrc;
+      } catch {
+        showToast('Audio offline tidak dapat dibuka. Coba unduh ulang saat online.');
+        return;
+      }
+    }
+    setAudioInfo({ src: playableSrc, originalSrc: src, title: selectedSurah.namaLatin, subtitle: `Murottal · ${QARIS[qariIndex]}`, trackType: 'full', surahNumber: selectedSurah.nomor, verseIndex: 0 });
   };
+
+  const downloadCurrentSurahAudio = async () => {
+    if (!selectedSurah) return;
+    if (!navigator.onLine) { showToast('Sambungkan internet sebelum mengunduh audio murottal.'); return; }
+    if (audioDownloadInFlightRef.current) { showToast('Tunggu unduhan audio yang sedang berjalan selesai.'); return; }
+    const surahId = Number(selectedSurah.nomor);
+    const src = chooseAudio(selectedSurah.audioFull, qariIndex);
+    if (!src) { showToast('Sumber audio penuh tidak tersedia untuk qari ini.'); return; }
+    let parsedSource;
+    try { parsedSource = new URL(src); } catch { showToast('Alamat sumber audio tidak valid.'); return; }
+    if (parsedSource.protocol !== 'https:') { showToast('Unduhan hanya diizinkan dari sumber audio HTTPS.'); return; }
+    if (typeof caches === 'undefined' || typeof caches.open !== 'function') {
+      showToast('Browser ini belum mendukung penyimpanan audio offline.');
+      return;
+    }
+    audioDownloadInFlightRef.current = true;
+    setAudioDownloadProgress({ surahId, loaded: 0, total: 0, title: selectedSurah.namaLatin });
+    try {
+      const cache = await caches.open(OFFLINE_AUDIO_CACHE_NAME);
+      const existing = await cache.match(src);
+      if (existing) {
+        const existingBytes = Number(existing.headers.get('content-length')) || offlineAudioTracks.find((track) => track.src === src)?.bytes || 0;
+        const priorTrack = offlineAudioTracks.find((track) => track.surahId === surahId);
+        const nextTracks = upsertOfflineAudioTrack(offlineAudioTracks, { surahId, src, title: selectedSurah.namaLatin, reciter: QARIS[qariIndex], bytes: existingBytes, savedAt: Date.now() });
+        if (!writeLocal(OFFLINE_AUDIO_STORAGE_KEY, nextTracks)) throw new Error('Penyimpanan metadata penuh.');
+        if (priorTrack?.src && priorTrack.src !== src) await cache.delete(priorTrack.src);
+        setOfflineAudioTracks(nextTracks);
+        await refreshOfflineAudioStats(nextTracks);
+        showToast(`Audio ${selectedSurah.namaLatin} sudah tersedia offline.`);
+        return;
+      }
+
+      const priorTrack = offlineAudioTracks.find((track) => track.surahId === surahId);
+      const totalWithoutThisSurah = totalOfflineAudioBytes(offlineAudioTracks.filter((track) => track.surahId !== surahId));
+      if (totalWithoutThisSurah >= MAX_TOTAL_AUDIO_BYTES) throw new Error('Batas total audio offline 200 MB tercapai. Hapus audio lain terlebih dahulu.');
+      const response = await fetch(src, { method: 'GET', mode: 'cors', credentials: 'omit', cache: 'no-store' });
+      if (!response.ok || response.status !== 200 || response.type === 'opaque') {
+        throw new Error('Sumber audio tidak mengizinkan unduhan lintas situs.');
+      }
+      const declaredLength = Number(response.headers.get('content-length')) || 0;
+      if (declaredLength > MAX_AUDIO_TRACK_BYTES) throw new Error('Ukuran audio melebihi batas 80 MB per surah.');
+      if (declaredLength && totalWithoutThisSurah + declaredLength > MAX_TOTAL_AUDIO_BYTES) throw new Error('Batas total audio offline 200 MB akan terlampaui. Hapus audio lain terlebih dahulu.');
+      try {
+        const estimate = await navigator.storage?.estimate?.();
+        const available = Number(estimate?.quota) - Number(estimate?.usage);
+        if (declaredLength && Number.isFinite(available) && available > 0 && available < declaredLength + 8 * 1024 * 1024) {
+          throw new Error('Ruang penyimpanan perangkat tidak cukup untuk audio ini.');
+        }
+      } catch (storageError) {
+        if (storageError instanceof Error && storageError.message.includes('Ruang penyimpanan')) throw storageError;
+      }
+
+      let blob;
+      if (response.body?.getReader) {
+        const reader = response.body.getReader();
+        const chunks = [];
+        let loaded = 0;
+        let lastReported = 0;
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            loaded += value.byteLength;
+            if (loaded > MAX_AUDIO_TRACK_BYTES) {
+              await reader.cancel();
+              throw new Error('Ukuran audio melebihi batas 80 MB per surah.');
+            }
+            if (totalWithoutThisSurah + loaded > MAX_TOTAL_AUDIO_BYTES) {
+              await reader.cancel();
+              throw new Error('Batas total audio offline 200 MB akan terlampaui. Hapus audio lain terlebih dahulu.');
+            }
+            chunks.push(value);
+            if (loaded - lastReported >= 512 * 1024 || loaded === declaredLength) {
+              setAudioDownloadProgress({ surahId, loaded, total: declaredLength, title: selectedSurah.namaLatin });
+              lastReported = loaded;
+            }
+          }
+        } finally {
+          reader.releaseLock?.();
+        }
+        const responseType = String(response.headers.get('content-type') || '').toLowerCase();
+        const audioMimeType = responseType.startsWith('audio/') ? responseType.split(';')[0] : 'audio/mpeg';
+        blob = new Blob(chunks, { type: audioMimeType });
+      } else {
+        blob = await response.blob();
+      }
+      if (!blob.size) throw new Error('Sumber audio mengembalikan file kosong.');
+      if (blob.size > MAX_AUDIO_TRACK_BYTES) throw new Error('Ukuran audio melebihi batas 80 MB per surah.');
+      if (totalWithoutThisSurah + blob.size > MAX_TOTAL_AUDIO_BYTES) throw new Error('Batas total audio offline 200 MB akan terlampaui. Hapus audio lain terlebih dahulu.');
+      setAudioDownloadProgress({ surahId, loaded: blob.size, total: blob.size, title: selectedSurah.namaLatin });
+      const contentType = blob.type || response.headers.get('content-type') || 'audio/mpeg';
+      const cacheResponse = new Response(blob, { status: 200, headers: { 'Content-Type': contentType, 'Content-Length': String(blob.size), 'Cache-Control': 'public, max-age=31536000' } });
+      await cache.put(src, cacheResponse);
+      const track = { surahId, src, title: selectedSurah.namaLatin, reciter: QARIS[qariIndex], bytes: blob.size, savedAt: Date.now() };
+      const nextTracks = upsertOfflineAudioTrack(offlineAudioTracks, track);
+      if (!writeLocal(OFFLINE_AUDIO_STORAGE_KEY, nextTracks)) {
+        await cache.delete(src);
+        throw new Error('Metadata audio tidak bisa disimpan. Periksa ruang penyimpanan browser.');
+      }
+      if (priorTrack?.src && priorTrack.src !== src) await cache.delete(priorTrack.src);
+      setOfflineAudioTracks(nextTracks);
+      await refreshOfflineAudioStats(nextTracks);
+      showToast(`Audio ${selectedSurah.namaLatin} tersimpan offline (${formatStorageBytes(blob.size)}).`);
+    } catch (error) {
+      const message = String(error?.message || '');
+      if (/Batas total|melebihi batas|Ruang penyimpanan|Metadata audio|metadata penuh|file kosong/i.test(message)) showToast(message);
+      else showToast('Unduhan audio gagal. Pastikan internet aktif dan sumber audio mengizinkan akses unduhan (CORS), lalu coba lagi.');
+    } finally {
+      audioDownloadInFlightRef.current = false;
+      setAudioDownloadProgress(null);
+    }
+  };
+
+  const removeOfflineAudioTrack = async (track) => {
+    if (!track?.src || !window.confirm(`Hapus audio murottal ${track.title} dari penyimpanan offline? Data ayat, bookmark, catatan, dan progres tidak akan dihapus.`)) return;
+    try {
+      const cache = await caches.open(OFFLINE_AUDIO_CACHE_NAME);
+      await cache.delete(track.src);
+      const nextTracks = offlineAudioTracks.filter((item) => item.src !== track.src);
+      const metadataSaved = writeLocal(OFFLINE_AUDIO_STORAGE_KEY, nextTracks);
+      setOfflineAudioTracks(nextTracks);
+      if (audioInfo?.originalSrc === track.src || audioInfo?.src === track.src) {
+        audioRef.current?.pause();
+        releaseAudioObjectUrl();
+        setAudioInfo(null);
+        setAudioPlaying(false);
+      }
+      await refreshOfflineAudioStats(nextTracks);
+      showToast(metadataSaved ? `Audio ${track.title} dihapus dari penyimpanan offline.` : 'Audio dihapus dari cache, tetapi daftar lokal gagal diperbarui. Buka ulang pengaturan untuk memeriksa status.');
+    } catch {
+      showToast('Audio belum dapat dihapus. Periksa dukungan penyimpanan browser.');
+    }
+  };
+
+  const clearOfflineAudioTracks = async () => {
+    if (!offlineAudioTracks.length && !offlineAudioStats.cachedSrcs.length) return;
+    if (!window.confirm(`Hapus semua audio murottal offline (${formatStorageBytes(offlineAudioStats.cachedBytes)})? Cache ayat, bookmark, catatan, dan progres membaca tetap dipertahankan.`)) return;
+    try {
+      await caches.delete(OFFLINE_AUDIO_CACHE_NAME);
+      window.localStorage.setItem(OFFLINE_AUDIO_STORAGE_KEY, JSON.stringify([]));
+      setOfflineAudioTracks([]);
+      setOfflineAudioStats({ cachedSrcs: [], missingSrcs: [], cachedBytes: 0 });
+      if (audioInfo?.originalSrc && offlineAudioTracks.some((track) => track.src === audioInfo.originalSrc)) {
+        audioRef.current?.pause();
+        releaseAudioObjectUrl();
+        setAudioInfo(null);
+        setAudioPlaying(false);
+      }
+      showToast('Semua audio offline dihapus. Cache ayat dan data pribadi tetap aman.');
+    } catch {
+      showToast('Audio offline belum dapat dibersihkan. Periksa pengaturan penyimpanan browser.');
+    }
+  };
+
   const saveCurrentSurahOffline = () => {
     if (!selectedSurah || !verses.length) {
       showToast('Buka surah dan tunggu ayatnya termuat sebelum menyimpan offline.');
@@ -1057,7 +1268,7 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
   };
   const exportLocalBackup = () => {
     try {
-      const backup = createLocalBackup(window.localStorage, '1.10.0');
+      const backup = createLocalBackup(window.localStorage, '1.11.0');
       const entryCount = Object.keys(backup.data).length;
       if (!entryCount) {
         showToast('Belum ada data Nurani yang bisa dicadangkan.');
@@ -1254,13 +1465,21 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
     </div>
   );
 
+  const currentFullAudioSrc = selectedSurah ? chooseAudio(selectedSurah.audioFull, qariIndex) : '';
+  const currentAudioTrackSaved = Boolean(currentFullAudioSrc && offlineAudioStats.cachedSrcs.includes(currentFullAudioSrc));
+  const currentAudioDownloadProgress = audioDownloadProgress?.surahId === Number(selectedSurah?.nomor) ? audioDownloadProgress : null;
+  const currentAudioDownloadPercent = currentAudioDownloadProgress?.total
+    ? Math.min(100, Math.round((currentAudioDownloadProgress.loaded / currentAudioDownloadProgress.total) * 100))
+    : null;
+
   const renderReader = () => (
     <div className="reader-page">
       <div className="reader-topbar"><button className="back-button" onClick={() => { setSelectedSurah(null); setActiveTab('quran'); }}><ChevronLeft size={19} /> <span>Daftar surah</span></button><button className={`icon-button ${bookmarkedSurahs.includes(Number(selectedSurah?.nomor)) ? 'is-saved' : ''}`} aria-label="Bookmark surah" onClick={() => toggleSurahBookmark(Number(selectedSurah?.nomor))}><Bookmark size={18} fill={bookmarkedSurahs.includes(Number(selectedSurah?.nomor)) ? 'currentColor' : 'none'} /></button></div>
       <section className="reader-surah-hero">
         <div className="reader-surah-heading"><div><p className="eyebrow">SURAH KE-{selectedSurah?.nomor || '—'}</p><h1>{selectedSurah?.namaLatin}</h1><p>{selectedSurah?.arti} <span>·</span> {selectedSurah?.tempatTurun || 'Al-Qur’an'} <span>·</span> {selectedSurah?.jumlahAyat || verses.length} ayat</p></div><div className="reader-surah-arabic" dir="rtl">{selectedSurah?.nama || ''}</div></div>
         <div className="bismillah" dir="rtl">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</div>
-        <div className="reader-actions"><button className="button button-gold" onClick={playFullSurah}><Play size={16} fill="currentColor" /> Putar satu surah</button><button className="button button-glass" onClick={() => openTafsir()}><BookOpen size={16} /> Tafsir</button><button className={`button button-glass ${offlineSurahs.includes(Number(selectedSurah?.nomor)) ? 'selected' : ''}`} onClick={saveCurrentSurahOffline} disabled={!verses.length || offlineSurahs.includes(Number(selectedSurah?.nomor))}>{offlineSurahs.includes(Number(selectedSurah?.nomor)) ? <Check size={16} /> : <Download size={16} />} {offlineSurahs.includes(Number(selectedSurah?.nomor)) ? 'Tersimpan offline' : 'Simpan offline'}</button><button className={`button button-glass ${readerSettingsOpen ? 'selected' : ''}`} onClick={() => setReaderSettingsOpen((value) => !value)}><SlidersHorizontal size={16} /> Tampilan</button></div>
+        <div className="reader-actions"><button className="button button-gold" onClick={playFullSurah}><Play size={16} fill="currentColor" /> Putar satu surah</button><button className="button button-glass" onClick={() => openTafsir()}><BookOpen size={16} /> Tafsir</button><button className={`button button-glass ${currentAudioTrackSaved ? 'selected' : ''}`} onClick={downloadCurrentSurahAudio} disabled={!currentFullAudioSrc || !online || Boolean(currentAudioDownloadProgress) || currentAudioTrackSaved} title={!online ? 'Sambungkan internet untuk mengunduh' : currentAudioTrackSaved ? 'Audio sudah disimpan di perangkat' : 'Unduh audio murottal untuk didengarkan offline'}>{currentAudioDownloadProgress ? <><LoaderCircle size={15} className="spin" /> {currentAudioDownloadPercent === null ? formatStorageBytes(currentAudioDownloadProgress.loaded) : `${currentAudioDownloadPercent}%`}</> : currentAudioTrackSaved ? <><Check size={15} /> Audio tersimpan</> : <><Headphones size={15} /> Unduh audio</>}</button><button className={`button button-glass ${offlineSurahs.includes(Number(selectedSurah?.nomor)) ? 'selected' : ''}`} onClick={saveCurrentSurahOffline} disabled={!verses.length || offlineSurahs.includes(Number(selectedSurah?.nomor))}>{offlineSurahs.includes(Number(selectedSurah?.nomor)) ? <Check size={16} /> : <Download size={16} />} {offlineSurahs.includes(Number(selectedSurah?.nomor)) ? 'Tersimpan offline' : 'Simpan offline'}</button><button className={`button button-glass ${readerSettingsOpen ? 'selected' : ''}`} onClick={() => setReaderSettingsOpen((value) => !value)}><SlidersHorizontal size={16} /> Tampilan</button></div>
+        {currentAudioDownloadProgress && <div className="audio-download-progress" role="status"><div className="audio-download-progress-copy"><span>Mengunduh audio {currentAudioDownloadProgress.title}</span><strong>{currentAudioDownloadPercent === null ? formatStorageBytes(currentAudioDownloadProgress.loaded) : `${currentAudioDownloadPercent}%`}</strong></div><div className="audio-download-progress-track"><span style={{ width: `${currentAudioDownloadPercent ?? 8}%` }} /></div><small>Jangan tutup halaman sampai unduhan selesai.</small></div>}
       </section>
       {readerSettingsOpen && <section className="reader-settings card-surface">
         <div className="settings-panel-heading"><div><strong>Pengaturan bacaan</strong><span>Atur sesuai kenyamananmu</span></div><button className="icon-button small" onClick={() => setReaderSettingsOpen(false)} aria-label="Tutup pengaturan"><X size={17} /></button></div>
@@ -1389,12 +1608,12 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
       {audioInfo && <div className={`sticky-audio ${audioExpanded ? 'audio-expanded' : ''}`}>
         <audio ref={audioRef} src={audioInfo.src} onEnded={handleAudioEnded} onPause={() => setAudioPlaying(false)} onPlay={() => setAudioPlaying(true)} preload="none" />
         {audioExpanded && <div className="audio-expanded-body"><div className="audio-equalizer"><AudioLines size={20} /></div><div><strong>{audioInfo.title}</strong><span>{audioInfo.subtitle}</span></div><button className="icon-button" onClick={() => setAudioExpanded(false)} aria-label="Ciutkan pemutar"><ChevronDown size={18} /></button></div>}
-        <div className="audio-track-art"><AudioLines size={19} /></div><div className="audio-track-info"><strong>{audioInfo.title}</strong><span>{audioInfo.subtitle}</span></div><button className="icon-button audio-dismiss" aria-label="Tutup pemutar" onClick={() => { audioRef.current?.pause(); setAudioInfo(null); setAudioPlaying(false); }}><X size={17} /></button><button className="audio-play-button" aria-label={audioPlaying ? 'Jeda audio' : 'Putar audio'} onClick={toggleAudioPlayback}>{audioPlaying ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" />}</button><button className="icon-button audio-more" aria-label="Besarkan pemutar" onClick={() => setAudioExpanded((value) => !value)}>{audioExpanded ? <ChevronDown size={17} /> : <MoreHorizontal size={17} />}</button>
+        <div className="audio-track-art"><AudioLines size={19} /></div><div className="audio-track-info"><strong>{audioInfo.title}</strong><span>{audioInfo.subtitle}</span></div><button className="icon-button audio-dismiss" aria-label="Tutup pemutar" onClick={() => { audioRef.current?.pause(); releaseAudioObjectUrl(); setAudioInfo(null); setAudioPlaying(false); }}><X size={17} /></button><button className="audio-play-button" aria-label={audioPlaying ? 'Jeda audio' : 'Putar audio'} onClick={toggleAudioPlayback}>{audioPlaying ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" />}</button><button className="icon-button audio-more" aria-label="Besarkan pemutar" onClick={() => setAudioExpanded((value) => !value)}>{audioExpanded ? <ChevronDown size={17} /> : <MoreHorizontal size={17} />}</button>
       </div>}
 
       <nav className="bottom-nav" aria-label="Navigasi utama">{NAV_ITEMS.map((item) => { const Icon = item.icon; const isActive = activeTab === item.id; return <a key={item.id} href={TAB_PATHS[item.id]} className={`nav-item ${isActive ? 'active' : ''}`} onClick={(event) => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return; event.preventDefault(); setActiveDuaSlug(null); setActiveTab(item.id); if (item.id !== 'quran') setSelectedSurah(null); }} aria-current={isActive ? 'page' : undefined}><span className="nav-icon-wrap"><Icon size={20} strokeWidth={isActive ? 2.4 : 1.8} /></span><span>{item.label}</span></a>; })}</nav>
 
-      {settingsOpen && <div className="modal-backdrop" onClick={() => setSettingsOpen(false)}><section className="modal-card settings-modal" onClick={(event) => event.stopPropagation()}><div className="modal-header"><div><p className="eyebrow">PENGATURAN</p><h2>Preferensi aplikasi</h2><p className="muted">Atur tampilan dan lindungi data tilawahmu.</p></div><button className="icon-button" onClick={() => setSettingsOpen(false)} aria-label="Tutup pengaturan"><X size={19} /></button></div><button className="settings-row" onClick={() => setTheme((value) => value === 'light' ? 'dark' : 'light')}><span className="settings-row-icon">{theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}</span><span><strong>Tampilan</strong><small>{theme === 'light' ? 'Mode terang' : 'Mode gelap'}</small></span><ChevronRight size={17} /></button><button className="settings-row" onClick={installApp}><span className="settings-row-icon"><Download size={18} /></span><span><strong>Pasang aplikasi</strong><small>Tambahkan Nurani ke layar utama</small></span><ChevronRight size={17} /></button><section className="backup-section"><div className="backup-section-heading"><span className="settings-row-icon"><ShieldCheck size={18} /></span><div><strong>Cadangkan & pulihkan data</strong><small>Bookmark, progres, posisi bacaan, favorit, pengaturan, dan catatan tadabbur.</small></div></div><div className="backup-actions"><button type="button" className="button button-secondary" onClick={exportLocalBackup}><Download size={16} /> Ekspor cadangan</button><button type="button" className="button button-gold" onClick={() => backupFileInputRef.current?.click()}><Upload size={16} /> Impor cadangan</button><input ref={backupFileInputRef} className="backup-file-input" type="file" accept=".json,application/json" onChange={importLocalBackup} aria-label="Pilih file cadangan Nurani" /></div><p className="backup-privacy-note">Cadangan dibuat sebagai file JSON yang tersimpan di perangkat. File ini dapat berisi catatan pribadi—simpan di tempat yang aman dan jangan membagikannya secara publik. Impor hanya memproses key Nurani yang dikenal (maks. 5 MB).</p></section><section className="offline-manager-section"><button type="button" className="offline-manager-toggle" aria-expanded={offlineManagerExpanded} onClick={() => { const next = !offlineManagerExpanded; setOfflineManagerExpanded(next); if (next) void refreshOfflineStorage(); }}><span className="settings-row-icon">{online ? <Download size={18} /> : <WifiOff size={18} />}</span><span className="offline-manager-toggle-copy"><strong>Kelola konten offline</strong><small>{offlineSurahs.length} surah ditandai · {formatStorageBytes(offlineStorageStats.pinnedBytes)} data ayat</small></span>{offlineManagerExpanded ? <ChevronDown size={17} /> : <ChevronRight size={17} />}</button>{offlineManagerExpanded && <div className="offline-manager-body"><div className="offline-stats-grid"><div className="offline-stat"><span>Cache ayat lokal</span><strong>{offlineStorageStats.cachedSurahIds.length} surah</strong><small>{formatStorageBytes(offlineStorageStats.cachedVerseBytes)}</small></div><div className="offline-stat"><span>Penyimpanan origin</span><strong>{offlineStorageStats.originUsage === null ? 'Tidak tersedia' : formatStorageBytes(offlineStorageStats.originUsage)}</strong><small>{offlineStorageStats.originQuota === null ? 'Estimasi browser tidak didukung' : `Dari ${formatStorageBytes(offlineStorageStats.originQuota)} yang diizinkan`}</small></div></div>{offlineStorageStats.missingPinnedSurahIds.length > 0 && <p className="offline-manager-warning"><WifiOff size={14} /> {offlineStorageStats.missingPinnedSurahIds.length} surah ditandai offline tetapi data ayatnya tidak ditemukan. Simpan ulang surah saat online.</p>}{offlineSurahs.length > 0 ? <div className="offline-manager-list">{offlineSurahs.map((id) => { const surah = surahs.find((item) => Number(item.nomor) === Number(id)) || fallbackSurahs[Number(id) - 1]; const rows = offlineStorageStats.cachedVerseCounts[Number(id)] || 0; return <div className="offline-manager-item" key={id}><span className="offline-manager-book"><BookOpen size={16} /></span><div className="offline-manager-item-copy"><strong>{surah?.namaLatin || `Surah ${id}`}</strong><small>{rows ? `${rows} ayat tersimpan · ${formatStorageBytes(offlineStorageStats.cachedSurahBytes[Number(id)] || 0)}` : 'Data ayat perlu disimpan ulang'}</small></div><button type="button" className="icon-button small" aria-label={`Buka ${surah?.namaLatin || `Surah ${id}`}`} title="Buka surah" onClick={() => { setSettingsOpen(false); void openSurah(surah, 1); }}><ArrowRight size={15} /></button><button type="button" className="icon-button small offline-remove-button" aria-label={`Hapus ${surah?.namaLatin || `Surah ${id}`} dari data offline`} title="Hapus data offline" onClick={() => removeOfflineSurah(id)}><Trash2 size={14} /></button></div>; })}</div> : <div className="offline-manager-empty"><WifiOff size={18} /><span>Belum ada surah yang ditandai untuk akses offline. Buka surah saat terhubung internet lalu tekan <strong>Simpan offline</strong>.</span></div>}<button type="button" className="button button-danger-ghost offline-clear-button" onClick={clearOfflineQuranData} disabled={offlineStorageStats.cachedSurahIds.length === 0 && offlineSurahs.length === 0}><Trash2 size={14} /> Hapus semua cache ayat</button><p className="offline-manager-note">Estimasi penyimpanan berasal dari browser dan dapat mencakup cache serta data Nurani lain di origin yang sama. Catatan, bookmark, progres, dan file cadangan tidak ikut dihapus saat cache ayat dibersihkan.</p><button type="button" className="text-link offline-refresh-button" onClick={() => void refreshOfflineStorage()}><RefreshCw size={13} /> Perbarui informasi penyimpanan</button></div>}</section><div className="settings-note"><ShieldCheck size={16} /><span>Data utama tetap disimpan lokal di perangkat ini. Katalog surah dan doa yang dapat diambil ulang tidak dimasukkan ke file cadangan.</span></div></section></div>}
+      {settingsOpen && <div className="modal-backdrop" onClick={() => setSettingsOpen(false)}><section className="modal-card settings-modal" onClick={(event) => event.stopPropagation()}><div className="modal-header"><div><p className="eyebrow">PENGATURAN</p><h2>Preferensi aplikasi</h2><p className="muted">Atur tampilan dan lindungi data tilawahmu.</p></div><button className="icon-button" onClick={() => setSettingsOpen(false)} aria-label="Tutup pengaturan"><X size={19} /></button></div><button className="settings-row" onClick={() => setTheme((value) => value === 'light' ? 'dark' : 'light')}><span className="settings-row-icon">{theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}</span><span><strong>Tampilan</strong><small>{theme === 'light' ? 'Mode terang' : 'Mode gelap'}</small></span><ChevronRight size={17} /></button><button className="settings-row" onClick={installApp}><span className="settings-row-icon"><Download size={18} /></span><span><strong>Pasang aplikasi</strong><small>Tambahkan Nurani ke layar utama</small></span><ChevronRight size={17} /></button><section className="backup-section"><div className="backup-section-heading"><span className="settings-row-icon"><ShieldCheck size={18} /></span><div><strong>Cadangkan & pulihkan data</strong><small>Bookmark, progres, posisi bacaan, favorit, pengaturan, dan catatan tadabbur.</small></div></div><div className="backup-actions"><button type="button" className="button button-secondary" onClick={exportLocalBackup}><Download size={16} /> Ekspor cadangan</button><button type="button" className="button button-gold" onClick={() => backupFileInputRef.current?.click()}><Upload size={16} /> Impor cadangan</button><input ref={backupFileInputRef} className="backup-file-input" type="file" accept=".json,application/json" onChange={importLocalBackup} aria-label="Pilih file cadangan Nurani" /></div><p className="backup-privacy-note">Cadangan dibuat sebagai file JSON yang tersimpan di perangkat. File ini dapat berisi catatan pribadi—simpan di tempat yang aman dan jangan membagikannya secara publik. Impor hanya memproses key Nurani yang dikenal (maks. 5 MB).</p></section><section className="offline-manager-section"><button type="button" className="offline-manager-toggle" aria-expanded={offlineManagerExpanded} onClick={() => { const next = !offlineManagerExpanded; setOfflineManagerExpanded(next); if (next) void refreshOfflineStorage(); }}><span className="settings-row-icon">{online ? <Download size={18} /> : <WifiOff size={18} />}</span><span className="offline-manager-toggle-copy"><strong>Kelola konten offline</strong><small>{offlineSurahs.length} surah ditandai · {formatStorageBytes(offlineStorageStats.pinnedBytes)} data ayat</small></span>{offlineManagerExpanded ? <ChevronDown size={17} /> : <ChevronRight size={17} />}</button>{offlineManagerExpanded && <div className="offline-manager-body"><div className="offline-stats-grid"><div className="offline-stat"><span>Cache ayat lokal</span><strong>{offlineStorageStats.cachedSurahIds.length} surah</strong><small>{formatStorageBytes(offlineStorageStats.cachedVerseBytes)}</small></div><div className="offline-stat"><span>Penyimpanan origin</span><strong>{offlineStorageStats.originUsage === null ? 'Tidak tersedia' : formatStorageBytes(offlineStorageStats.originUsage)}</strong><small>{offlineStorageStats.originQuota === null ? 'Estimasi browser tidak didukung' : `Dari ${formatStorageBytes(offlineStorageStats.originQuota)} yang diizinkan`}</small></div></div>{offlineStorageStats.missingPinnedSurahIds.length > 0 && <p className="offline-manager-warning"><WifiOff size={14} /> {offlineStorageStats.missingPinnedSurahIds.length} surah ditandai offline tetapi data ayatnya tidak ditemukan. Simpan ulang surah saat online.</p>}{offlineSurahs.length > 0 ? <div className="offline-manager-list">{offlineSurahs.map((id) => { const surah = surahs.find((item) => Number(item.nomor) === Number(id)) || fallbackSurahs[Number(id) - 1]; const rows = offlineStorageStats.cachedVerseCounts[Number(id)] || 0; return <div className="offline-manager-item" key={id}><span className="offline-manager-book"><BookOpen size={16} /></span><div className="offline-manager-item-copy"><strong>{surah?.namaLatin || `Surah ${id}`}</strong><small>{rows ? `${rows} ayat tersimpan · ${formatStorageBytes(offlineStorageStats.cachedSurahBytes[Number(id)] || 0)}` : 'Data ayat perlu disimpan ulang'}</small></div><button type="button" className="icon-button small" aria-label={`Buka ${surah?.namaLatin || `Surah ${id}`}`} title="Buka surah" onClick={() => { setSettingsOpen(false); void openSurah(surah, 1); }}><ArrowRight size={15} /></button><button type="button" className="icon-button small offline-remove-button" aria-label={`Hapus ${surah?.namaLatin || `Surah ${id}`} dari data offline`} title="Hapus data offline" onClick={() => removeOfflineSurah(id)}><Trash2 size={14} /></button></div>; })}</div> : <div className="offline-manager-empty"><WifiOff size={18} /><span>Belum ada surah yang ditandai untuk akses offline. Buka surah saat terhubung internet lalu tekan <strong>Simpan offline</strong>.</span></div>}<button type="button" className="button button-danger-ghost offline-clear-button" onClick={clearOfflineQuranData} disabled={offlineStorageStats.cachedSurahIds.length === 0 && offlineSurahs.length === 0}><Trash2 size={14} /> Hapus semua cache ayat</button><p className="offline-manager-note">Estimasi penyimpanan berasal dari browser dan dapat mencakup cache serta data Nurani lain di origin yang sama. Catatan, bookmark, progres, dan file cadangan tidak ikut dihapus saat cache ayat dibersihkan.</p><button type="button" className="text-link offline-refresh-button" onClick={() => void refreshOfflineStorage()}><RefreshCw size={13} /> Perbarui informasi penyimpanan</button><section className="offline-audio-manager"><div className="offline-audio-manager-heading"><span className="settings-row-icon"><Headphones size={18} /></span><div><strong>Audio murottal offline</strong><small>{offlineAudioTracks.length} surah · {formatStorageBytes(offlineAudioStats.cachedBytes)} tersimpan</small></div></div>{offlineAudioStats.missingSrcs.length > 0 && <p className="offline-manager-warning"><WifiOff size={14} /> {offlineAudioStats.missingSrcs.length} audio tercatat tetapi file cache tidak ditemukan. Hubungkan internet dan unduh ulang.</p>}{offlineAudioTracks.length ? <div className="offline-manager-list offline-audio-list">{offlineAudioTracks.map((track) => { const available = offlineAudioStats.cachedSrcs.includes(track.src); return <div className="offline-manager-item" key={track.surahId}><span className="offline-manager-book"><Headphones size={16} /></span><div className="offline-manager-item-copy"><strong>{track.title}</strong><small>{track.reciter} · {available ? formatStorageBytes(track.bytes) : 'File cache tidak ditemukan'}</small></div><button type="button" className="icon-button small offline-remove-button" aria-label={`Hapus audio ${track.title}`} title="Hapus audio offline" onClick={() => void removeOfflineAudioTrack(track)}><Trash2 size={14} /></button></div>; })}</div> : <div className="offline-manager-empty"><Headphones size={18} /><span>Belum ada audio yang diunduh. Buka surah, pilih qari, lalu tekan <strong>Unduh audio</strong>.</span></div>}{audioDownloadProgress && <p className="offline-audio-downloading"><LoaderCircle size={14} className="spin" /> Mengunduh {audioDownloadProgress.title}: {audioDownloadProgress.total ? `${Math.min(100, Math.round(audioDownloadProgress.loaded / audioDownloadProgress.total * 100))}%` : formatStorageBytes(audioDownloadProgress.loaded)}</p>}<button className="button button-danger-ghost offline-clear-button" onClick={() => void clearOfflineAudioTracks()} disabled={!offlineAudioTracks.length && !offlineAudioStats.cachedSrcs.length}><Trash2 size={14} /> Hapus semua audio offline</button><p className="offline-manager-note">Maksimal 80 MB per audio dan 200 MB total. Audio diunduh untuk qari yang sedang dipilih. Cache audio terpisah dari cache ayat dan tidak ikut dipindahkan lewat file cadangan.</p><button className="text-link offline-refresh-button" onClick={() => void refreshOfflineAudioStats()}><RefreshCw size={13} /> Periksa ulang cache audio</button></section></div>}</section><div className="settings-note"><ShieldCheck size={16} /><span>Data utama tetap disimpan lokal di perangkat ini. Katalog surah dan doa yang dapat diambil ulang tidak dimasukkan ke file cadangan.</span></div></section></div>}
 
       {verseNotesModalOpen && <div className="modal-backdrop" onClick={() => setVerseNotesModalOpen(false)}><section className="modal-card verse-notes-modal" onClick={(event) => event.stopPropagation()}><div className="modal-header"><div><p className="eyebrow">CATATAN PRIBADI</p><h2>Semua catatan tadabbur</h2><p className="muted">{allVerseNotes.length} catatan tersimpan di perangkat ini.</p></div><button className="icon-button" onClick={() => setVerseNotesModalOpen(false)} aria-label="Tutup catatan"><X size={19} /></button></div><div className="verse-notes-modal-list">{allVerseNotes.map((note) => <div className="verse-notes-modal-item" key={`${note.surahId}:${note.verseNumber}`}><div className="verse-notes-modal-item-copy"><strong>{note.surahName} · Ayat {note.verseNumber}</strong><p>{note.text}</p><small>{new Date(note.updatedAt || Date.now()).toLocaleString('id-ID')}</small></div><div className="verse-notes-modal-item-actions"><button type="button" className="icon-button small" aria-label={`Buka ${note.surahName} ayat ${note.verseNumber}`} onClick={() => openVerseFromNote(note)}><ArrowRight size={16} /></button><button type="button" className="icon-button small note-delete-action" aria-label={`Hapus catatan ${note.surahName} ayat ${note.verseNumber}`} onClick={() => deleteVerseNote(`${note.surahId}:${note.verseNumber}`)}><Trash2 size={15} /></button></div></div>)}</div><div className="modal-footnote"><ShieldCheck size={15} /><span>Catatan hanya disimpan pada browser/perangkat ini. Catatan tidak diunggah ke server dan tidak tersinkron otomatis ke perangkat lain.</span></div></section></div>}
 

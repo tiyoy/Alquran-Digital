@@ -22,7 +22,7 @@ File JSON memiliki bentuk umum:
 {
   "format": "nurani-local-backup",
   "schemaVersion": 1,
-  "appVersion": "1.10.0",
+  "appVersion": "1.11.0",
   "exportedAt": "2026-10-24T00:00:00.000Z",
   "data": {
     "aq:theme": "light",

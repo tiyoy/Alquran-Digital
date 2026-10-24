@@ -51,8 +51,11 @@ npm run start
 - [ ] Buka Pengaturan → Kelola konten offline; pastikan jumlah surah, ukuran cache lokal, dan estimasi storage tampil jika browser mendukung.
 - [ ] Hapus satu surah offline; pastikan hanya cache ayat/rute yang terkait yang hilang, sedangkan bookmark, catatan tadabbur, posisi bacaan, dan progres tetap ada.
 - [ ] Pilih Hapus semua cache ayat; pastikan daftar offline kosong, namun data pribadi Nurani tetap dipertahankan.
+- [ ] Pada pembaca surah, pilih qari dan tekan Unduh audio; periksa progres hingga selesai dan pastikan file tampil di Pengaturan → Kelola konten offline.
+- [ ] Aktifkan mode pesawat dan tekan Putar satu surah untuk surah yang audionya telah diunduh.
+- [ ] Hapus satu audio atau semua audio; pastikan cache ayat, bookmark, catatan tadabbur, dan progres khatam tetap ada.
 - [ ] Setelah menekan Simpan offline, uji rute surah/ayat saat offline. Cache HTML rute bersifat best-effort; pastikan pembaca tetap dapat menggunakan cache ayat lokal setelah app shell terbuka.
-- [ ] Pada Chrome DevTools → Application, pastikan manifest, ikon, dan service worker valid serta memakai cache `nurani-pwa-v18`.
+- [ ] Pada Chrome DevTools → Application, pastikan manifest, ikon, dan service worker valid serta memakai cache `nurani-pwa-v19`.
 
 > Catatan offline: aplikasi menyimpan data yang telah dimuat atau ditandai. Audio dari sumber eksternal dan konten yang belum pernah dibuka mungkin tetap membutuhkan internet.
 

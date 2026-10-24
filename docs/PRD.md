@@ -138,3 +138,14 @@ alquran-digital-nextjs/
 - Penghapusan cache ayat tidak menghapus bookmark, catatan tadabbur, posisi bacaan, progres khatam, atau pengaturan.
 - Service worker mencoba melakukan precache HTML untuk URL surah dan ayat saat pengguna menekan **Simpan offline**. Ini bersifat best-effort; data ayat lokal adalah jalur fallback utama di aplikasi.
 - Cache service worker diperbarui menjadi `nurani-pwa-v18`.
+
+
+### Pembaruan implementasi v1.11.0 — Unduhan audio offline
+
+- Pengguna dapat mengunduh audio penuh per surah berdasarkan qari aktif dan melihat progres unduh.
+- Satu audio disimpan per surah; batas maksimum 80 MB per audio dan 200 MB total. Storage API diperiksa bila tersedia.
+- Audio disimpan dalam Cache API khusus `nurani-audio-offline-v1` yang terpisah dari cache app shell dan data ayat.
+- Pengaturan menampilkan file audio yang tersedia, ukuran, qari, track yang cache-nya hilang, dan aksi hapus per file/semua audio.
+- Pemutaran offline membaca respons Cache API menjadi Blob/object URL lokal; jika audio belum diunduh, aplikasi memberi pesan untuk menyimpannya ketika terhubung internet.
+- Unduhan memerlukan host audio yang mengizinkan `fetch` lintas situs melalui CORS. Audio streaming yang sudah ada tetap mempertahankan alurnya.
+- Audio tidak dimasukkan dalam backup JSON dan tidak dihapus saat cache ayat dihapus.
