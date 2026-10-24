@@ -856,8 +856,13 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
     void openSurah(note.surahId, note.verseNumber);
   };
   const playVerse = async (verse, index) => {
-    const src = chooseAudio(verse.audio, qariIndex);
-    if (!src) { showToast('Audio per ayat belum disediakan oleh sumber untuk pilihan ini.'); return; }
+    const reciterId = QARI_IDS[qariIndex] || '05';
+    const savedTrack = offlineAudioTracks.find((track) => Number(track.surahId) === Number(selectedSurah?.nomor)
+      && track.type === 'verse'
+      && Number(track.verseNumber) === Number(verse?.nomorAyat)
+      && track.reciterId === reciterId);
+    const src = chooseAudio(verse.audio, qariIndex) || savedTrack?.src || '';
+    if (!src) { showToast('Audio ayat belum termuat. Hubungkan internet lalu gunakan tombol Unduh audio ayat untuk memuat ulang sumbernya.'); return; }
     audioRef.current?.pause();
     releaseAudioObjectUrl();
     repeatCountRef.current = 0;
@@ -888,14 +893,40 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
     const surahId = Number(selectedSurah?.nomor);
     const verseNumber = Number(verse?.nomorAyat);
     const surahName = String(selectedSurah?.namaLatin || `Surah ${surahId}`);
-    const src = chooseAudio(verse?.audio, qariIndex);
+    let src = chooseAudio(verse?.audio, qariIndex);
     if (!Number.isInteger(surahId) || surahId < 1 || surahId > 114 || !Number.isInteger(verseNumber) || verseNumber < 1) {
       showToast('Surah atau nomor ayat tidak valid untuk unduhan.');
       return;
     }
-    if (!src) { showToast('Audio ayat belum tersedia dari sumber untuk qari ini.'); return; }
     if (!navigator.onLine) { showToast('Sambungkan internet untuk mengunduh audio ayat ini.'); return; }
     if (audioDownloadInFlightRef.current) { showToast('Tunggu unduhan audio yang sedang berjalan selesai.'); return; }
+
+    // Older local verse caches and some initial server payloads can contain the
+    // text but omit the per-Qari `audio` map. Keep the download control usable:
+    // refresh the official surah payload once, update local cache, then resolve it.
+    if (!src) {
+      audioDownloadInFlightRef.current = true;
+      try {
+        const payload = await fetchQuran(`/surat/${surahId}`);
+        const freshRows = extractVerseRows(payload)
+          .map(normalizeVerse)
+          .filter((row) => row.teksArab || row.teksLatin || row.teksIndonesia);
+        if (freshRows.length) {
+          setVerses(freshRows);
+          writeLocal(`aq:verses:${surahId}`, freshRows);
+          const freshVerse = freshRows.find((row) => Number(row.nomorAyat) === verseNumber);
+          src = chooseAudio(freshVerse?.audio, qariIndex);
+        }
+      } catch {
+        // Report a single actionable message below instead of hiding the button.
+      } finally {
+        audioDownloadInFlightRef.current = false;
+      }
+    }
+    if (!src) {
+      showToast('Alamat audio ayat belum tersedia dari EQuran. Muat ulang surah saat online, lalu coba lagi.');
+      return;
+    }
 
     let parsedSource;
     try { parsedSource = new URL(src); } catch { showToast('Alamat audio ayat tidak valid.'); return; }
@@ -1794,13 +1825,18 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
         <label className="repeat-control"><Repeat size={16} /><span>Ulang ayat</span><select value={audioRepeat} onChange={(event) => { setAudioRepeat(event.target.value); repeatCountRef.current = 0; }} aria-label="Atur pengulangan ayat">{AUDIO_REPEAT_OPTIONS.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}</select></label>
         <form className="jump-form" onSubmit={(event) => { event.preventDefault(); const n = Math.min(Math.max(Number(jumpVerse) || 1, 1), verses.length || Number(selectedSurah?.jumlahAyat) || 1); pendingJumpRef.current = n; document.getElementById(`verse-${selectedSurah?.nomor}-${n}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }}><label htmlFor="jump-verse">Ayat</label><input id="jump-verse" type="number" min="1" max={selectedSurah?.jumlahAyat || 999} value={jumpVerse} onChange={(event) => setJumpVerse(event.target.value)} /><button type="submit" aria-label="Lompat ke ayat"><ArrowRight size={16} /></button></form>
       </div>
-      {verses.length > 0 && <p className="verse-audio-download-tip"><Download size={14} /><span><strong>Mode hemat penyimpanan:</strong> tekan ikon unduh pada kartu ayat untuk menyimpan audio ayat itu saja. Tombol <strong>Unduh audio</strong> di atas menyimpan satu surah penuh.</span></p>}
+      {verses.length > 0 && <p className="verse-audio-download-tip"><Download size={14} /><span><strong>Mode hemat penyimpanan:</strong> gunakan tombol <strong>Unduh audio ayat</strong> yang terlihat pada setiap kartu untuk menyimpan satu ayat saja. Tombol <strong>Unduh audio</strong> di atas menyimpan satu surah penuh.</span></p>}
       {verseLoading && !verses.length && <div className="verse-skeletons">{[0,1,2].map((item) => <div className="verse-skeleton card-surface" key={item}><div /><div /><div /></div>)}</div>}
       {!verseLoading && !verses.length && <div className="empty-state card-surface"><div className="empty-icon"><WifiOff size={22} /></div><strong>Ayat belum tersedia offline</strong><p>Hubungkan perangkat ke internet untuk memuat surah ini sekali. Data yang berhasil dibuka akan disimpan di perangkat.</p><button className="button button-secondary" onClick={() => openSurah(selectedSurah, Number(jumpVerse) || 1)}><RefreshCw size={16} /> Coba lagi</button></div>}
       <div className="verses-list">
         {verses.map((verse, index) => {
           const verseKey = `${selectedSurah?.nomor}:${verse.nomorAyat}`;
-          const verseAudioSrc = chooseAudio(verse.audio, qariIndex);
+          const activeReciterId = QARI_IDS[qariIndex] || '05';
+          const savedVerseTrack = offlineAudioTracks.find((track) => Number(track.surahId) === Number(selectedSurah?.nomor)
+            && track.type === 'verse'
+            && Number(track.verseNumber) === Number(verse.nomorAyat)
+            && track.reciterId === activeReciterId);
+          const verseAudioSrc = chooseAudio(verse.audio, qariIndex) || savedVerseTrack?.src || '';
           const verseAudioSaved = Boolean(verseAudioSrc && offlineAudioStats.cachedSrcs.includes(verseAudioSrc));
           const verseAudioDownloading = audioDownloadProgress?.trackType === 'verse'
             && Number(audioDownloadProgress.surahId) === Number(selectedSurah?.nomor)
@@ -1810,11 +1846,25 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
           const isSharedVerseTarget = Number(selectedSurah?.nomor) === safeInitialSurahNumber
             && Number(sharedVerseTarget) === Number(verse.nomorAyat);
           return <article id={`verse-${selectedSurah?.nomor}-${verse.nomorAyat}`} className={`verse-card card-surface ${isPlayingVerse ? 'is-playing' : ''} ${isSharedVerseTarget ? 'is-shared-target' : ''}`} key={`${selectedSurah?.nomor}-${verse.nomorAyat}`}>
-            <div className="verse-card-top"><div className="verse-number"><span>{verse.nomorAyat}</span></div><div className="verse-meta"><span>{selectedSurah?.namaLatin} · Ayat {verse.nomorAyat}</span>{isPlayingVerse && <span className="now-playing"><AudioLines size={13} /> Sedang diputar</span>}</div><div className="verse-quick-actions"><button className="icon-button small" aria-label="Putar ayat" title="Putar ayat" onClick={() => void playVerse(verse, index)}>{isPlayingVerse && audioPlaying ? <AudioLines size={16} /> : <Play size={16} />}</button><button className={`icon-button small ${verseAudioSaved ? 'is-saved' : ''}`} aria-label={verseAudioSaved ? `Audio ayat ${verse.nomorAyat} sudah tersimpan` : `Unduh audio ayat ${verse.nomorAyat}`} title={verseAudioDownloading ? 'Mengunduh audio ayat…' : verseAudioSaved ? 'Audio ayat sudah tersimpan offline' : 'Unduh audio ayat saja untuk menghemat penyimpanan'} onClick={() => void downloadVerseAudio(verse)} disabled={!online || !verseAudioSrc || verseAudioSaved || Boolean(audioDownloadProgress)}>{verseAudioDownloading ? <LoaderCircle size={15} className="spin" /> : verseAudioSaved ? <Check size={15} /> : <Download size={15} />}</button><button className={`icon-button small ${bookmarkedVerses.includes(verseKey) ? 'is-saved' : ''}`} aria-label="Bookmark ayat" onClick={() => toggleVerseBookmark(verse.nomorAyat)}><Bookmark size={16} fill={bookmarkedVerses.includes(verseKey) ? 'currentColor' : 'none'} /></button><button className="icon-button small" aria-label="Salin teks ayat" title="Salin teks ayat" onClick={() => copyVerse(verse)}><Copy size={15} /></button><button className={`icon-button small ${verseNotes[verseKey] ? 'has-verse-note' : ''}`} aria-label={verseNotes[verseKey] ? "Edit catatan tadabbur" : "Tambah catatan tadabbur"} title={verseNotes[verseKey] ? "Edit catatan tadabbur" : "Tambah catatan tadabbur"} onClick={() => openVerseNoteEditor(selectedSurah, verse)}><PencilLine size={15} /></button><button className="icon-button small" aria-label="Bagikan ayat" title="Bagikan ayat" onClick={() => shareVerse(verse)}><Share2 size={15} /></button><button className="icon-button small tafsir-action" aria-label="Buka tafsir ayat" title="Buka tafsir ayat" onClick={() => openTafsir(verse)}><MoreHorizontal size={17} /></button></div></div>
+            <div className="verse-card-top"><div className="verse-number"><span>{verse.nomorAyat}</span></div><div className="verse-meta"><span>{selectedSurah?.namaLatin} · Ayat {verse.nomorAyat}</span>{isPlayingVerse && <span className="now-playing"><AudioLines size={13} /> Sedang diputar</span>}</div><div className="verse-quick-actions"><button className="icon-button small" aria-label="Putar ayat" title="Putar ayat" onClick={() => void playVerse(verse, index)}>{isPlayingVerse && audioPlaying ? <AudioLines size={16} /> : <Play size={16} />}</button><button className={`icon-button small ${bookmarkedVerses.includes(verseKey) ? 'is-saved' : ''}`} aria-label="Bookmark ayat" onClick={() => toggleVerseBookmark(verse.nomorAyat)}><Bookmark size={16} fill={bookmarkedVerses.includes(verseKey) ? 'currentColor' : 'none'} /></button><button className="icon-button small" aria-label="Salin teks ayat" title="Salin teks ayat" onClick={() => copyVerse(verse)}><Copy size={15} /></button><button className={`icon-button small ${verseNotes[verseKey] ? 'has-verse-note' : ''}`} aria-label={verseNotes[verseKey] ? "Edit catatan tadabbur" : "Tambah catatan tadabbur"} title={verseNotes[verseKey] ? "Edit catatan tadabbur" : "Tambah catatan tadabbur"} onClick={() => openVerseNoteEditor(selectedSurah, verse)}><PencilLine size={15} /></button><button className="icon-button small" aria-label="Bagikan ayat" title="Bagikan ayat" onClick={() => shareVerse(verse)}><Share2 size={15} /></button><button className="icon-button small tafsir-action" aria-label="Buka tafsir ayat" title="Buka tafsir ayat" onClick={() => openTafsir(verse)}><MoreHorizontal size={17} /></button></div></div>
             {arabicVisible && <p className="verse-arabic" dir="rtl" lang="ar" style={{ fontSize: `${arabicSize}px` }}>{cleanArabicText(verse.teksArab) || '—'}</p>}
             {latinVisible && verse.teksLatin && <p className="verse-latin" style={{ fontSize: `${latinSize}px` }}>{verse.teksLatin}</p>}
             {translationVisible && verse.teksIndonesia && <p className="verse-translation" style={{ fontSize: `${translationSize}px` }}>{verse.teksIndonesia}</p>}
             {!arabicVisible && !latinVisible && !translationVisible && <div className="hifz-hidden-note"><EyeOffIcon /> Mode hafalan aktif — semua teks disembunyikan.</div>}
+            <div className="verse-download-row">
+              <button
+                type="button"
+                className={`button button-secondary verse-download-button ${verseAudioSaved ? 'selected' : ''}`}
+                aria-label={verseAudioSaved ? `Audio ${selectedSurah?.namaLatin} ayat ${verse.nomorAyat} tersimpan offline` : `Unduh audio ${selectedSurah?.namaLatin} ayat ${verse.nomorAyat}`}
+                title={verseAudioSaved ? 'Audio ayat tersedia offline untuk qari terpilih' : !online ? 'Sambungkan internet untuk mengunduh audio ayat' : !verseAudioSrc ? 'Klik untuk memuat ulang sumber audio ayat lalu mengunduhnya' : 'Simpan audio ayat ini saja untuk menghemat penyimpanan'}
+                onClick={() => void downloadVerseAudio(verse)}
+                disabled={!online || verseAudioSaved || Boolean(audioDownloadProgress)}
+              >
+                {verseAudioDownloading ? <LoaderCircle size={15} className="spin" /> : verseAudioSaved ? <Check size={15} /> : !online ? <WifiOff size={15} /> : audioDownloadProgress ? <LoaderCircle size={15} className="spin" /> : <Download size={15} />}
+                {verseAudioSaved ? 'Audio ayat tersimpan' : verseAudioDownloading ? 'Mengunduh ayat…' : !online ? 'Butuh internet untuk unduh' : audioDownloadProgress ? 'Tunggu unduhan selesai' : 'Unduh audio ayat'}
+              </button>
+              <small className="verse-download-caption">{verseAudioSaved ? `Tersimpan untuk ${QARIS[qariIndex]}` : 'Hanya file ayat ini yang disimpan.'}</small>
+            </div>
             {translationVisible && verse.teksIndonesia && <button className="text-link verse-tafsir-link" onClick={() => openTafsir(verse)}>Baca tafsir ayat <ArrowRight size={14} /></button>}
             {verseNotes[verseKey] && editingVerseNote?.key !== verseKey && <div className="verse-note-preview"><div className="verse-note-title"><StickyNote size={14} /><strong>Catatan tadabbur pribadi</strong><span>Diperbarui {new Date(verseNotes[verseKey].updatedAt || Date.now()).toLocaleDateString('id-ID')}</span></div><p>{verseNotes[verseKey].text}</p><button type="button" className="text-link" onClick={() => openVerseNoteEditor(selectedSurah, verse)}>Ubah catatan <PencilLine size={13} /></button></div>}
             {editingVerseNote?.key === verseKey && <div className="verse-note-editor"><div className="verse-note-editor-heading"><div><strong>Catatan tadabbur</strong><small>{selectedSurah?.namaLatin} · Ayat {verse.nomorAyat}</small></div><span>{verseNoteDraft.length}/2000</span></div><textarea value={verseNoteDraft} onChange={(event) => setVerseNoteDraft(event.target.value.slice(0, 2000))} maxLength={2000} rows={4} placeholder="Tulis pemahaman, refleksi, pertanyaan, atau pelajaran dari ayat ini…" aria-label={`Catatan tadabbur ${selectedSurah?.namaLatin} ayat ${verse.nomorAyat}`} /><div className="verse-note-editor-actions"><button type="button" className="button button-secondary" onClick={() => { setEditingVerseNote(null); setVerseNoteDraft(''); }}>Batal</button>{verseNotes[verseKey] && <button type="button" className="button button-danger-ghost" onClick={() => deleteVerseNote(verseKey)}><Trash2 size={14} /> Hapus</button>}<button type="button" className="button button-gold" onClick={saveVerseNote}><Check size={15} /> Simpan catatan</button></div></div>}

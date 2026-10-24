@@ -252,6 +252,11 @@ h1, h2, h3, p { margin-top: 0; }
 .verse-quick-actions { display: flex; align-items: center; gap: 3px; }
 .verse-quick-actions .icon-button { border: 0; background: transparent; }
 .verse-quick-actions .icon-button:hover { background: var(--emerald-pale); }
+.verse-download-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.verse-download-button { min-height: 36px; padding: 0 12px; gap: 7px; font-size: 11px; }
+.verse-download-button.selected { color: var(--emerald-deep); background: var(--emerald-pale); border-color: color-mix(in srgb, var(--emerald) 34%, var(--line)); }
+.verse-download-button:disabled { opacity: .92; cursor: default; transform: none; }
+.verse-download-caption { color: var(--muted); font-size: 10px; line-height: 1.5; }
 .verse-arabic { margin: 22px 0 18px; color: var(--ink); font-family: 'Amiri Quran', 'Scheherazade New', 'Noto Naskh Arabic', 'Amiri', 'Traditional Arabic', serif; font-weight: 400; text-align: right; line-height: 2.5; overflow-wrap: anywhere; -webkit-font-smoothing: antialiased; }
 .verse-latin { margin: 0 0 12px; color: var(--emerald); font-size: 12px; line-height: 1.9; font-style: italic; }
 .verse-translation { margin: 0; color: var(--ink-soft); line-height: 1.85; font-size: 15px; }

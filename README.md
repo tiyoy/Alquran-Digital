@@ -46,7 +46,7 @@ Setiap doa harian juga memiliki URL individual, misalnya `/doa/1-doa-sebelum-mak
 
 Next.js membangun 114 route dari metadata surah lokal. Setiap route menyediakan title, deskripsi, canonical URL, Open Graph, dan Twitter Card khusus. Daftar surah menampilkan anchor HTML yang bisa diikuti crawler, sedangkan klik normal tetap membuka pembaca di dalam aplikasi tanpa reload.
 
-## Fitur terbaru — v1.13.0
+## Fitur terbaru — v1.13.1
 
 - URL detail individual untuk doa harian dengan pola `/doa/{id}-{slug-judul}`, contoh `/doa/1-doa-sebelum-makan`.
 - Setiap kartu doa memiliki aksi **Bagikan doa** dan **Buka doa**.
@@ -374,3 +374,7 @@ Pemeriksaan deployment setelah rilis: buka URL ayat lalu gunakan **View Page Sou
 - Panel pengelolaan offline mendukung filter qari dan hapus semua audio untuk qari terpilih.
 - Batas total penyimpanan menghitung audio dari semua qari. Lihat [`docs/OFFLINE-AUDIO-MANAGEMENT.md`](./docs/OFFLINE-AUDIO-MANAGEMENT.md).
 - EQuran mendokumentasikan MP3 berkualitas tinggi, tetapi tidak mencantumkan beberapa bitrate untuk file yang sama; Nurani mempertahankan kualitas asli dan tidak mengklaim dapat mengubah bitrate.
+
+## Unduh audio per ayat (v1.13.1)
+
+Setiap kartu ayat memiliki tombol berlabel **Unduh audio ayat**. Jika URL audio tidak ikut tersimpan dalam cache lokal, Nurani akan memuat ulang metadata surah dari EQuran dan mencoba kembali.
