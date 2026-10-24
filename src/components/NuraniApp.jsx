@@ -1897,6 +1897,30 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
         <div className="reader-actions"><button className="button button-gold" onClick={playFullSurah}><Play size={16} fill="currentColor" /> Putar satu surah</button><button className="button button-glass" onClick={() => openTafsir()}><BookOpen size={16} /> Tafsir</button><button className={`button button-glass ${currentAudioTrackSaved ? 'selected' : ''}`} onClick={downloadCurrentSurahAudio} disabled={!online || Boolean(audioDownloadProgress) || currentAudioTrackSaved} title={!online ? 'Sambungkan internet untuk mengunduh' : audioDownloadProgress ? 'Tunggu unduhan audio yang sedang berjalan selesai' : currentAudioTrackSaved ? 'Audio qari ini sudah disimpan di perangkat' : !currentFullAudioSrc ? 'Sumber audio belum termuat; klik untuk melihat petunjuk' : 'Unduh audio qari yang dipilih untuk didengarkan offline'}>{currentAudioDownloadProgress ? <><LoaderCircle size={15} className="spin" /> {currentAudioDownloadPercent === null ? formatStorageBytes(currentAudioDownloadProgress.loaded) : `${currentAudioDownloadPercent}%`}</> : currentAudioTrackSaved ? <><Check size={15} /> Audio tersimpan</> : <><Headphones size={15} /> Unduh audio</>}</button><button className={`button button-glass ${offlineSurahs.includes(Number(selectedSurah?.nomor)) ? 'selected' : ''}`} onClick={saveCurrentSurahOffline} disabled={!verses.length || offlineSurahs.includes(Number(selectedSurah?.nomor))}>{offlineSurahs.includes(Number(selectedSurah?.nomor)) ? <Check size={16} /> : <Download size={16} />} {offlineSurahs.includes(Number(selectedSurah?.nomor)) ? 'Tersimpan offline' : 'Simpan offline'}</button><button className={`button button-glass ${readerSettingsOpen ? 'selected' : ''}`} onClick={() => setReaderSettingsOpen((value) => !value)}><SlidersHorizontal size={16} /> Tampilan</button></div>
         {currentAudioDownloadProgress && <div className="audio-download-progress" role="status"><div className="audio-download-progress-copy"><span>Mengunduh audio {currentAudioDownloadProgress.title}</span><strong>{currentAudioDownloadPercent === null ? formatStorageBytes(currentAudioDownloadProgress.loaded) : `${currentAudioDownloadPercent}%`}</strong></div><div className="audio-download-progress-track"><span style={{ width: `${currentAudioDownloadPercent ?? 8}%` }} /></div><small>Jangan tutup halaman sampai unduhan selesai.</small></div>}
       </section>
+      <details className="tajweed-guide-card">
+        <summary>
+          <span className="tajweed-guide-summary-icon"><Palette size={18} /></span>
+          <span className="tajweed-guide-summary-copy"><strong>Panduan warna tajwid</strong><small>Kenali jenis hukum dan cara membacanya</small></span>
+          <span className="tajweed-guide-count">{TAJWEED_RULES.length} penanda</span>
+          <ChevronDown size={17} className="tajweed-guide-chevron" />
+        </summary>
+        <div className="tajweed-guide-content">
+          <p className="tajweed-guide-intro">Tabel ini tersedia di setiap surah, baik mode warna tajwid aktif maupun tidak. Warna mengikuti anotasi edisi <em>quran-tajweed</em> dari AlQuran.cloud; mushaf lain dapat memakai sistem warna berbeda.</p>
+          <div className="tajweed-guide-table-scroll" role="region" aria-label={`Tabel panduan tajwid Surah ${selectedSurah?.namaLatin || ''}`} tabIndex="0">
+            <table className="tajweed-guide-table">
+              <caption>Warna, jenis hukum tajwid, ciri, dan cara membaca</caption>
+              <thead><tr><th scope="col">Warna</th><th scope="col">Jenis / hukum</th><th scope="col">Ciri</th><th scope="col">Cara membaca</th></tr></thead>
+              <tbody>{TAJWEED_RULES.map((rule) => <tr key={rule.code}>
+                <td data-label="Warna"><span className={`tajweed-guide-color tajweed-token tajweed-${rule.code}`} aria-hidden="true">●</span><span className="tajweed-guide-color-name">{rule.colorName}</span></td>
+                <td data-label="Jenis / hukum"><strong>{rule.label}</strong>{rule.arabicName && <small className="tajweed-guide-arabic" lang="ar" dir="rtl">{rule.arabicName}</small>}</td>
+                <td data-label="Ciri">{rule.recognition}</td>
+                <td data-label="Cara membaca">{rule.reading}</td>
+              </tr>)}</tbody>
+            </table>
+          </div>
+          <p className="tajweed-guide-footnote">Keterangan merupakan ringkasan belajar. Untuk pasangan huruf atau variasi panjang bacaan yang bergantung pada riwayat, ikuti mushaf dan guru yang Anda gunakan. <a href="https://alquran.cloud/tajweed-guide" target="_blank" rel="noreferrer">Lihat referensi warna tajwid</a>.</p>
+        </div>
+      </details>
       {readerSettingsOpen && <section className="reader-settings card-surface">
         <div className="settings-panel-heading"><div><strong>Pengaturan bacaan</strong><span>Atur sesuai kenyamananmu</span></div><button className="icon-button small" onClick={() => setReaderSettingsOpen(false)} aria-label="Tutup pengaturan"><X size={17} /></button></div>
         <div className="visibility-toggles">
@@ -1911,7 +1935,7 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
           {tajweedCache[Number(selectedSurah?.nomor)]?.ayahs?.length > 0 && <><Check size={14} /> Warna tajwid aktif untuk {selectedSurah?.namaLatin}.<span className="tajweed-source-inline">Sumber: <a href="https://alquran.cloud/tajweed-guide" target="_blank" rel="noreferrer">AlQuran.cloud / Islamic Network</a>.</span></>}
           {!online && tajweedLoadingSurah !== Number(selectedSurah?.nomor) && !tajweedCache[Number(selectedSurah?.nomor)]?.ayahs?.length && tajweedErrorSurah !== Number(selectedSurah?.nomor) && <><WifiOff size={14} /> Data tajwid surah ini belum tersimpan di perangkat.</>}
         </div>}
-        {tajweedEnabled && <details className="tajweed-legend"><summary>Legenda warna tajwid ({TAJWEED_RULES.length} aturan)</summary><div className="tajweed-legend-grid">{TAJWEED_RULES.map((rule) => <div className="tajweed-legend-item" key={rule.code}><span className={`tajweed-token tajweed-${rule.code}`} aria-hidden="true">●</span><span>{rule.label}</span></div>)}</div><p>Warna mengikuti anotasi edisi quran-tajweed. Teks Arab saat mode ini aktif berasal dari edisi tersebut; matikan sakelar untuk kembali ke teks standar Nurani.</p></details>}
+        {tajweedEnabled && <p className="tajweed-legend-hint"><Info size={13} /> Rincian arti setiap warna, jenis hukum, dan cara membaca tersedia di menu <strong>Panduan warna tajwid</strong> pada bagian atas halaman surah.</p>}
         <div className="font-settings-row"><div><div className="range-label"><span>Ukuran teks Arab</span><strong>{arabicSize}px</strong></div><input type="range" min="20" max="52" value={arabicSize} onChange={(event) => setArabicSize(Number(event.target.value))} aria-label="Ukuran teks Arab" /></div><div><div className="range-label"><span>Ukuran teks Latin</span><strong>{latinSize}px</strong></div><input type="range" min="12" max="30" value={latinSize} onChange={(event) => setLatinSize(Number(event.target.value))} aria-label="Ukuran teks Latin" /></div><div><div className="range-label"><span>Ukuran terjemahan</span><strong>{translationSize}px</strong></div><input type="range" min="12" max="24" value={translationSize} onChange={(event) => setTranslationSize(Number(event.target.value))} aria-label="Ukuran terjemahan" /></div></div>
         <button className="text-link reset-reader" onClick={resetReaderSettings}>Kembalikan pengaturan awal <RefreshCw size={14} /></button>
       </section>}

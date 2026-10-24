@@ -4,23 +4,23 @@ export const TAJWEED_CACHE_LIMIT = 3;
 // Colors and rule names follow the quran-tajweed edition exposed by AlQuran.cloud.
 // Nurani renders explicit source annotations; it does not infer rules from Arabic text.
 export const TAJWEED_RULES = Object.freeze([
-  { code: 'h', label: 'Hamzatul wasal', description: 'Hamzah wasal', color: '#AAAAAA' },
-  { code: 's', label: 'Huruf sukun/silent', description: 'Huruf berpenanda silent pada edisi tajwid', color: '#AAAAAA' },
-  { code: 'l', label: 'Lam syamsiyah', description: 'Lam syamsiyah', color: '#AAAAAA' },
-  { code: 'n', label: 'Mad normal', description: 'Mad normal: 2 harakat', color: '#537FFF' },
-  { code: 'p', label: 'Mad jaiz', description: 'Mad jaiz: 2, 4, atau 6 harakat', color: '#4050FF' },
-  { code: 'm', label: 'Mad lazim', description: 'Mad lazim: 6 harakat', color: '#000EBC' },
-  { code: 'q', label: 'Qalqalah', description: 'Qalqalah', color: '#DD0008' },
-  { code: 'o', label: 'Mad wajib', description: 'Mad wajib: 4–5 harakat', color: '#2144C1' },
-  { code: 'c', label: 'Ikhfa syafawi', description: 'Ikhfa syafawi dengan mim', color: '#D500B7' },
-  { code: 'f', label: 'Ikhfa', description: 'Ikhfa', color: '#9400A8' },
-  { code: 'w', label: 'Idgham syafawi', description: 'Idgham syafawi dengan mim', color: '#58B800' },
-  { code: 'i', label: 'Iqlab', description: 'Iqlab', color: '#26BFFD' },
-  { code: 'a', label: 'Idgham dengan ghunnah', description: 'Idgham dengan ghunnah', color: '#169777' },
-  { code: 'u', label: 'Idgham tanpa ghunnah', description: 'Idgham tanpa ghunnah', color: '#169200' },
-  { code: 'd', label: 'Idgham mutajanisain', description: 'Idgham mutajanisain', color: '#A1A1A1' },
-  { code: 'b', label: 'Idgham mutaqaribain', description: 'Idgham mutaqaribain', color: '#A1A1A1' },
-  { code: 'g', label: 'Ghunnah', description: 'Ghunnah: 2 harakat', color: '#FF7E1E' }
+  { code: "h", label: "Hamzatul wasal", arabicName: "همزة الوصل", colorName: "Abu-abu", recognition: "Hamzah waṣal (ٱ) pada awal kata.", reading: "Saat memulai dari kata itu, lafalkan sesuai harakatnya. Ketika disambung dari kata sebelumnya, hamzah waṣal tidak dibunyikan terpisah.", color: "#AAAAAA" },
+  { code: "s", label: "Huruf/tanda silent", arabicName: "", colorName: "Abu-abu", recognition: "Huruf atau tanda yang ditandai “silent” oleh edisi tajwid.", reading: "Ikuti bentuk bacaan mushaf; jangan menambahkan bunyi pada bagian yang ditandai tidak dilafalkan.", color: "#AAAAAA" },
+  { code: "l", label: "Lam syamsiyah", arabicName: "لام شمسية", colorName: "Abu-abu", recognition: "Lam pada ال di depan huruf syamsiyah.", reading: "Lam tidak terdengar terpisah; huruf syamsiyah sesudahnya dibaca bertasydid.", color: "#AAAAAA" },
+  { code: "n", label: "Mad normal (mad asli)", arabicName: "مد عادي", colorName: "Biru", recognition: "Penanda mad normal pada edisi ini, umumnya berupa huruf mad tanpa sebab mad tambahan.", reading: "Dibaca panjang 2 harakat.", color: "#537FFF" },
+  { code: "p", label: "Mad jaiz / mad permissible", arabicName: "مد جائز", colorName: "Biru", recognition: "Bagian yang diberi penanda “madda permissible” oleh edisi quran-tajweed.", reading: "Edisi sumber mencantumkan pilihan 2, 4, atau 6 harakat. Ikuti riwayat dan pedoman mushaf/guru yang digunakan.", color: "#4050FF" },
+  { code: "m", label: "Mad lazim (madda necessary)", arabicName: "مد لازم", colorName: "Biru", recognition: "Bagian yang diberi penanda “madda necessary” oleh edisi quran-tajweed.", reading: "Dibaca panjang 6 harakat.", color: "#000EBC" },
+  { code: "q", label: "Qalqalah", arabicName: "قلقلة", colorName: "Merah", recognition: "Salah satu huruf ق ط ب ج د ber-sukun.", reading: "Ada pantulan suara ringan pada huruf tersebut. Jangan menambahkan vokal penuh setelahnya.", color: "#DD0008" },
+  { code: "o", label: "Mad wajib (madda obligatory)", arabicName: "مد واجب", colorName: "Biru", recognition: "Bagian yang diberi penanda “madda obligatory” oleh edisi quran-tajweed.", reading: "Panduan edisi sumber mencantumkan 4–5 harakat untuk penanda ini. Ikuti riwayat bacaan yang digunakan.", color: "#2144C1" },
+  { code: "c", label: "Ikhfa syafawi", arabicName: "إخفاء شفوي", colorName: "Magenta", recognition: "Mim sukun (مْ) bertemu huruf ba (ب).", reading: "Samarkan bunyi mim dengan ghunnah (dengung) sekitar 2 harakat.", color: "#D500B7" },
+  { code: "f", label: "Ikhfa haqiqi", arabicName: "إخفاء", colorName: "Ungu", recognition: "Nun sukun (نْ) atau tanwin bertemu salah satu huruf ت ث ج د ذ ز س ش ص ض ط ظ ف ق ك.", reading: "Samarkan bunyi nun/tanwin di antara izhar dan idgham, disertai ghunnah sekitar 2 harakat.", color: "#9400A8" },
+  { code: "w", label: "Idgham syafawi", arabicName: "إدغام شفوي", colorName: "Hijau", recognition: "Mim sukun (مْ) bertemu mim (م).", reading: "Gabungkan bunyi mim pertama ke mim berikutnya disertai ghunnah sekitar 2 harakat.", color: "#58B800" },
+  { code: "i", label: "Iqlab", arabicName: "إقلاب", colorName: "Biru kehijauan", recognition: "Nun sukun (نْ) atau tanwin bertemu huruf ba (ب).", reading: "Ubah bunyi nun/tanwin menjadi mim samar disertai ghunnah sekitar 2 harakat.", color: "#168AB8" },
+  { code: "a", label: "Idgham bighunnah", arabicName: "إدغام بغنة", colorName: "Toska", recognition: "Nun sukun atau tanwin bertemu ي ن م و pada posisi yang berlaku hukum ini.", reading: "Leburkan bunyi nun/tanwin ke huruf berikutnya dengan ghunnah sekitar 2 harakat.", color: "#169777" },
+  { code: "u", label: "Idgham bilaghunnah", arabicName: "إدغام بلا غنة", colorName: "Hijau", recognition: "Nun sukun atau tanwin bertemu lam (ل) atau ra (ر).", reading: "Leburkan bunyi nun/tanwin ke huruf berikutnya tanpa ghunnah.", color: "#169200" },
+  { code: "d", label: "Idgham mutajanisain", arabicName: "إدغام متجانسين", colorName: "Abu-abu", recognition: "Dua huruf dari makhraj yang sama tetapi berbeda sifat, pada pasangan yang berlaku hukum ini.", reading: "Huruf pertama dilebur ke huruf kedua sesuai kaidah pasangan huruf dan riwayat bacaan.", color: "#A1A1A1" },
+  { code: "b", label: "Idgham mutaqaribain", arabicName: "إدغام متقاربين", colorName: "Abu-abu", recognition: "Dua huruf dengan makhraj atau sifat yang berdekatan, pada pasangan yang berlaku hukum ini.", reading: "Huruf pertama dilebur ke huruf kedua sesuai kaidah pasangan huruf dan riwayat bacaan.", color: "#A1A1A1" },
+  { code: "g", label: "Ghunnah", arabicName: "غنة", colorName: "Jingga", recognition: "Penanda dengung; sering terlihat pada nun atau mim bertasydid.", reading: "Dengungkan suara melalui rongga hidung selama 2 harakat.", color: "#D76510" },
 ]);
 
 const TAJWEED_RULE_BY_CODE = Object.freeze(Object.fromEntries(TAJWEED_RULES.map((rule) => [rule.code, rule])));
