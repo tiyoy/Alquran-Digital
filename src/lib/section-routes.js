@@ -23,6 +23,13 @@ export const SECTION_ROUTES = [
     keywords: ['pencarian Al-Qur’an', 'cari ayat Al-Qur’an', 'pencarian terjemahan Al-Qur’an', 'cari ayat Arab Latin']
   },
   {
+    tab: 'stats',
+    path: '/statistik-tilawah',
+    title: 'Statistik Tilawah dan Target Harian Al-Qur’an',
+    description: 'Pantau progres ayat, rentetan tilawah, kalender aktivitas 30 hari, dan target membaca Al-Qur’an harian di Nurani. Data tersimpan lokal di perangkat.',
+    keywords: ['statistik tilawah', 'target membaca Al-Qur’an harian', 'progres membaca Al-Qur’an', 'kalender tilawah']
+  },
+  {
     tab: 'prayer',
     path: '/jadwal-shalat',
     title: 'Jadwal Shalat Kabupaten Bogor dan Indonesia',

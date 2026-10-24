@@ -13,6 +13,7 @@ export const LOCAL_BACKUP_KEYS = Object.freeze([
   'aq:read-verse-keys',
   'aq:reading-days',
   'aq:khatam-days',
+  'aq:daily-verse-target',
   'aq:audio-repeat',
   'aq:audio-speed',
   'aq:favorite-asma',
@@ -28,6 +29,7 @@ export const LOCAL_BACKUP_LABELS = Object.freeze({
   'aq:read-verse-keys': 'Progres ayat yang dibaca',
   'aq:reading-days': 'Riwayat bacaan harian',
   'aq:khatam-days': 'Target khatam',
+  'aq:daily-verse-target': 'Target ayat harian',
   'aq:audio-repeat': 'Pengulangan audio',
   'aq:audio-speed': 'Kecepatan audio',
   'aq:favorite-asma': 'Favorit Asmaul Husna',
@@ -134,6 +136,10 @@ function normalizeBackupValue(key, value) {
       const days = Number(value);
       return [30, 60, 90].includes(days) ? { valid: true, value: days } : { valid: false };
     }
+    case 'aq:daily-verse-target': {
+      const target = Number(value);
+      return Number.isInteger(target) && target >= 1 && target <= 200 ? { valid: true, value: target } : { valid: false };
+    }
     case 'aq:audio-repeat':
       return ['off', '3', '5', '10', 'infinite'].includes(value) ? { valid: true, value } : { valid: false };
     case 'aq:audio-speed': {
@@ -153,7 +159,7 @@ function normalizeBackupValue(key, value) {
   }
 }
 
-export function createLocalBackup(storage, appVersion = '1.17.0', exportedAt = new Date().toISOString()) {
+export function createLocalBackup(storage, appVersion = '1.19.0', exportedAt = new Date().toISOString()) {
   const data = {};
   LOCAL_BACKUP_KEYS.forEach((key) => {
     const raw = storage.getItem(key);
@@ -216,6 +222,7 @@ export function describeLocalBackupValue(key, value) {
   if (key === 'aq:favorite-asma') return `${(value || []).length} nama`;
   if (key === 'aq:last-read') return value ? `${value.surahName}, ayat ${value.verse}` : 'belum ada';
   if (key === 'aq:khatam-days') return `${value} hari`;
+  if (key === 'aq:daily-verse-target') return `${value} ayat per hari`;
   if (key === 'aq:audio-repeat') return value === 'off' ? 'mati' : value === 'infinite' ? 'tanpa batas' : `${value}×`;
   if (key === 'aq:audio-speed') return `${Number(value).toLocaleString('id-ID')}×`;
   if (key === 'aq:theme') return value === 'dark' ? 'gelap' : 'terang';

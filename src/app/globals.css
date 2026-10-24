@@ -1232,3 +1232,106 @@ h1, h2, h3, p { margin-top: 0; }
   .quran-search-suggestions { gap: 5px; }
   .quran-search-suggestions button { padding: 0 7px; }
 }
+
+/* Daily tilawah goals and personal reading statistics (v1.19.0). */
+.home-daily-goal-picker { display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid var(--line); }
+.home-daily-goal-picker > span { color: var(--ink-soft); font-size: 11px; font-weight: 800; }
+.home-daily-goal-picker .goal-options { width: fit-content; max-width: 100%; flex-wrap: wrap; }
+.daily-goal-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.daily-goal-footer .progress-footnote { margin: 0; max-width: 540px; }
+.daily-goal-footer .text-link { flex: 0 0 auto; }
+.tilawah-stats-page { padding-bottom: 14px; }
+.tilawah-stats-hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(160px, .48fr); gap: 22px; align-items: center; padding: clamp(20px, 3.5vw, 30px); overflow: hidden; background: radial-gradient(circle at 90% 5%, rgba(217, 119, 6, .13), transparent 36%), var(--surface); }
+.tilawah-stats-hero h2 { margin: 10px 0; font-size: clamp(24px, 3.3vw, 34px); line-height: 1.13; letter-spacing: -.055em; }
+.tilawah-stats-hero p { margin: 0; color: var(--muted); font-size: 12px; }
+.tilawah-stats-hero-progress { display: flex; flex-direction: column; align-items: center; gap: 9px; }
+.tilawah-ring { display: grid; place-items: center; width: 142px; aspect-ratio: 1; padding: 10px; border-radius: 50%; background: conic-gradient(var(--emerald) var(--tilawah-progress, 0%), var(--surface-strong) 0); }
+.tilawah-ring > div { display: flex; align-items: center; justify-content: center; flex-direction: column; width: 100%; height: 100%; border-radius: 50%; background: var(--surface); }
+.tilawah-ring strong { font-size: 28px; line-height: 1.1; letter-spacing: -.05em; font-variant-numeric: tabular-nums; }
+.tilawah-ring span { margin-top: 4px; color: var(--muted); font-size: 10px; }
+.tilawah-stats-hero-progress > small { color: var(--muted); text-align: center; font-size: 11px; }
+.tilawah-metric-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.tilawah-metric { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; gap: 5px; padding: 15px; }
+.tilawah-metric-icon { display: grid; place-items: center; width: 35px; height: 35px; border-radius: 12px; background: var(--emerald-pale); color: var(--emerald); }
+.tilawah-metric > strong { margin-top: 4px; font-size: clamp(18px, 2.1vw, 25px); letter-spacing: -.05em; line-height: 1.15; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.tilawah-metric > span:not(.tilawah-metric-icon) { color: var(--ink-soft); font-size: 11px; font-weight: 800; line-height: 1.45; }
+.tilawah-metric > small { color: var(--muted); font-size: 10px; line-height: 1.55; }
+.tilawah-panel { gap: 14px; }
+.tilawah-week-chart { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 7px; padding: 16px 12px 12px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); }
+.tilawah-week-day { display: flex; align-items: center; flex-direction: column; justify-content: flex-end; min-width: 0; gap: 6px; color: var(--muted); }
+.tilawah-week-day > strong { color: var(--ink-soft); font-size: 10px; font-variant-numeric: tabular-nums; }
+.tilawah-bar-track { display: flex; align-items: flex-end; justify-content: center; width: 100%; max-width: 38px; height: 100px; padding: 0 2px; border-radius: 8px; background: var(--surface-muted); overflow: hidden; }
+.tilawah-bar-track > span { display: block; width: 100%; min-height: 3px; border-radius: 7px 7px 2px 2px; background: linear-gradient(180deg, #34c58a, var(--emerald)); transition: height .25s ease; }
+.tilawah-week-day.is-today .tilawah-bar-track > span { background: linear-gradient(180deg, #f7c766, var(--gold)); }
+.tilawah-week-day.is-today > span { color: var(--emerald); font-weight: 800; }
+.tilawah-week-day > span { font-size: 10px; font-weight: 700; text-transform: capitalize; }
+.tilawah-week-day > small { max-width: 100%; overflow: hidden; color: var(--muted); font-size: 9px; white-space: nowrap; text-overflow: ellipsis; }
+.tilawah-recent-days { display: flex; flex-direction: column; gap: 0; padding: 2px 14px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); }
+.tilawah-recent-days h3 { margin: 12px 0 4px; font-size: 13px; }
+.tilawah-recent-day { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 0; border-top: 1px solid var(--line); }
+.tilawah-recent-day > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.tilawah-recent-day strong { font-size: 11px; text-transform: capitalize; }
+.tilawah-recent-day small { color: var(--muted); font-size: 10px; }
+.tilawah-recent-day > span { flex: 0 0 auto; color: var(--ink-soft); font-size: 11px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.tilawah-recent-day.is-today strong { color: var(--emerald); }
+.tilawah-calendar-legend { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; color: var(--muted); font-size: 10px; }
+.tilawah-calendar-legend > span { display: inline-flex; align-items: center; gap: 5px; }
+.tilawah-calendar-dot { display: inline-block; width: 11px; height: 11px; border-radius: 3px; }
+.tilawah-calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.tilawah-calendar-cell { display: grid; place-items: center; min-height: 38px; border: 1px solid var(--line); border-radius: 9px; color: var(--muted); background: var(--surface); font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.tilawah-calendar-cell.is-today { outline: 2px solid var(--gold); outline-offset: 1px; color: var(--ink); }
+.tilawah-calendar-cell.level-0, .tilawah-calendar-dot.level-0 { background: var(--surface-muted); }
+.tilawah-calendar-cell.level-1, .tilawah-calendar-dot.level-1 { border-color: color-mix(in srgb, var(--emerald) 30%, var(--line)); background: color-mix(in srgb, var(--emerald) 12%, var(--surface)); color: var(--ink-soft); }
+.tilawah-calendar-cell.level-2, .tilawah-calendar-dot.level-2 { border-color: color-mix(in srgb, var(--emerald) 45%, var(--line)); background: color-mix(in srgb, var(--emerald) 27%, var(--surface)); color: var(--ink); }
+.tilawah-calendar-cell.level-3, .tilawah-calendar-dot.level-3 { border-color: var(--emerald); background: var(--emerald); color: #fff; }
+.tilawah-stats-note { display: flex; align-items: flex-start; gap: 7px; margin: 4px 0 0; color: var(--muted); font-size: 10px; line-height: 1.65; }
+.tilawah-stats-note svg { flex: 0 0 auto; margin-top: 1px; }
+.daily-goal-settings { display: flex; flex-direction: column; gap: 14px; padding: 18px; }
+.daily-goal-settings > p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.65; }
+.daily-goal-preset-options { align-self: flex-start; flex-wrap: wrap; }
+.daily-goal-preset-options button { min-width: 70px; }
+.daily-goal-custom-form { display: flex; flex-direction: column; gap: 8px; padding-top: 14px; border-top: 1px solid var(--line); }
+.daily-goal-custom-form > label { color: var(--ink-soft); font-size: 11px; font-weight: 800; }
+.daily-goal-custom-form > div { display: flex; align-items: center; gap: 9px; }
+.daily-goal-custom-form input { width: min(190px, 45%); min-height: 42px; padding: 0 12px; border: 1px solid var(--line); border-radius: 11px; color: var(--ink); background: var(--surface-muted); font-variant-numeric: tabular-nums; }
+.daily-goal-custom-form input:focus { outline: 2px solid var(--emerald); outline-offset: 2px; }
+.daily-goal-custom-form .button { min-height: 42px; }
+.daily-goal-current-progress { display: flex; flex-direction: column; gap: 9px; padding-top: 12px; border-top: 1px solid var(--line); }
+.tilawah-estimate-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 11px; }
+.tilawah-estimate-row > span { color: var(--muted); }
+.tilawah-estimate-row > strong { color: var(--ink); font-variant-numeric: tabular-nums; }
+.tilawah-stats-footer { display: flex; align-items: flex-start; gap: 8px; padding: 14px; border: 1px solid var(--line); border-radius: 13px; color: var(--muted); font-size: 10px; line-height: 1.7; background: var(--surface-muted); }
+.tilawah-stats-footer svg { flex: 0 0 auto; color: var(--emerald); }
+.tilawah-back-home { align-self: flex-start; }
+@media (max-width: 900px) {
+  .tilawah-metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .tilawah-stats-hero { grid-template-columns: minmax(0, 1fr) 112px; gap: 12px; padding: 17px; }
+  .tilawah-stats-hero h2 { font-size: 23px; }
+  .tilawah-ring { width: 105px; padding: 7px; }
+  .tilawah-ring strong { font-size: 22px; }
+  .tilawah-ring span { font-size: 8px; }
+  .tilawah-stats-hero-progress > small { font-size: 9px; }
+  .tilawah-metric { padding: 12px; }
+  .tilawah-metric > strong { font-size: 21px; }
+  .tilawah-week-chart { gap: 4px; padding: 12px 6px 10px; }
+  .tilawah-bar-track { height: 84px; }
+  .tilawah-week-day > strong { font-size: 9px; }
+  .tilawah-week-day > span { font-size: 9px; }
+  .tilawah-week-day > small { font-size: 8px; }
+  .tilawah-calendar-grid { gap: 4px; }
+  .tilawah-calendar-cell { min-height: 32px; border-radius: 7px; font-size: 10px; }
+  .daily-goal-footer { align-items: flex-start; flex-direction: column; }
+  .home-daily-goal-picker .goal-options { width: 100%; }
+  .home-daily-goal-picker .goal-options button { flex: 1 1 auto; }
+}
+@media (max-width: 380px) {
+  .tilawah-stats-hero { grid-template-columns: minmax(0, 1fr); }
+  .tilawah-stats-hero-progress { flex-direction: row; justify-content: flex-start; }
+  .tilawah-ring { width: 84px; }
+  .tilawah-ring strong { font-size: 19px; }
+  .tilawah-metric-grid { gap: 7px; }
+  .tilawah-metric > strong { font-size: 19px; }
+  .tilawah-calendar-cell { min-height: 29px; }
+}

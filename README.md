@@ -15,7 +15,7 @@
   <img alt="Tailwind CSS" src="https://img.shields.io/badge/Tailwind_CSS-v3-06B6D4?logo=tailwindcss&logoColor=white" />
   <img alt="PWA" src="https://img.shields.io/badge/PWA-Installable-5A0FC8?logo=pwa&logoColor=white" />
   <img alt="Bahasa Indonesia" src="https://img.shields.io/badge/Bahasa-Indonesia-059669" />
-  <img alt="Versi aplikasi 1.17.0" src="https://img.shields.io/badge/Versi-1.17.0-059669" />
+  <img alt="Versi aplikasi 1.19.0" src="https://img.shields.io/badge/Versi-1.19.0-059669" />
 </p>
 
 <p align="center">
@@ -45,6 +45,18 @@ Setiap surah memiliki halaman statis dengan URL yang mudah dibagikan, misalnya:
 Setiap doa harian juga memiliki URL individual, misalnya `/doa/1-doa-sebelum-makan`, sehingga bacaan Arab, Latin, terjemahan, dan sumber dapat dibagikan langsung.
 
 Next.js membangun 114 route dari metadata surah lokal. Setiap route menyediakan title, deskripsi, canonical URL, Open Graph, dan Twitter Card khusus. Daftar surah menampilkan anchor HTML yang bisa diikuti crawler, sedangkan klik normal tetap membuka pembaca di dalam aplikasi tanpa reload.
+
+## Fitur terbaru — v1.19.0 (Statistik Tilawah dan Target Harian)
+
+- Halaman `/statistik-tilawah` dengan ringkasan ayat unik dibaca, rentetan hari, rekor terbaik, aktivitas pekanan, kalender 30 hari, dan rata-rata ayat per hari aktif.
+- Target pribadi dapat diatur dari 1–200 ayat per hari melalui preset atau angka khusus; target harian terpisah dari rencana khatam 30/60/90 hari.
+- Kartu target di beranda menampilkan progres harian dan pintasan ke statistik lengkap.
+- Target harian disimpan sebagai `aq:daily-verse-target` dan disertakan dalam backup lokal yang tervalidasi.
+- Statistik menggunakan riwayat aktivitas yang tersedia pada perangkat; aplikasi tidak mengklaim mengukur durasi membaca dan tidak mengirim statistik ke server.
+- Service worker diperbarui ke `nurani-pwa-v32`; route statistik terdaftar di metadata dan sitemap melalui daftar section.
+- Dokumentasi: `docs/TILAWAH-STATS.md`.
+
+Sebelum deploy, jalankan `npm run lint` dan `npm run build`, lalu uji target, statistik harian, kalender, reset khatam, dan ekspor/impor backup.
 
 ## Fitur terbaru — v1.17.0 (Mode Belajar Tajwid Interaktif)
 
