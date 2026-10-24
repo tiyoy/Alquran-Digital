@@ -90,6 +90,7 @@ function normalizeReaderPrefs(value) {
     arabicVisible: value.arabicVisible !== false,
     latinVisible: value.latinVisible !== false,
     translationVisible: value.translationVisible !== false,
+    tajweedEnabled: value.tajweedEnabled === true,
     arabicSize: size(value.arabicSize, 20, 52, 32),
     latinSize: size(value.latinSize, 12, 30, 18),
     translationSize: size(value.translationSize, 12, 24, 15),
@@ -151,7 +152,7 @@ function normalizeBackupValue(key, value) {
   }
 }
 
-export function createLocalBackup(storage, appVersion = '1.14.0', exportedAt = new Date().toISOString()) {
+export function createLocalBackup(storage, appVersion = '1.16.0', exportedAt = new Date().toISOString()) {
   const data = {};
   LOCAL_BACKUP_KEYS.forEach((key) => {
     const raw = storage.getItem(key);

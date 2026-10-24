@@ -1016,3 +1016,51 @@ h1, h2, h3, p { margin-top: 0; }
   .qibla-actions { flex-direction: column; align-items: stretch; }
   .qibla-actions .button { width: 100%; }
 }
+
+/* Explicitly sourced Tajweed annotations (AlQuran.cloud quran-tajweed edition). */
+.tajweed-mode-setting { margin-top: 9px; }
+.tajweed-mode-setting strong { display: flex; align-items: center; gap: 6px; }
+.tajweed-mode-setting strong svg { color: var(--emerald); }
+.tajweed-mode-info { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 7px; margin-top: 10px; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--emerald) 22%, var(--line)); border-radius: 11px; background: var(--surface-muted); color: var(--ink-soft); font-size: 10px; line-height: 1.65; }
+.tajweed-mode-info > svg { flex: 0 0 auto; margin-top: 2px; color: var(--emerald); }
+.tajweed-mode-info button { padding: 0; border: 0; background: transparent; color: var(--emerald); font: inherit; font-weight: 800; text-decoration: underline; cursor: pointer; }
+.tajweed-source-inline { flex: 1 0 100%; color: var(--muted); }
+.tajweed-source-inline a { color: var(--emerald); text-underline-offset: 2px; }
+.tajweed-legend { margin-top: 10px; padding: 11px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-muted); }
+.tajweed-legend summary { color: var(--ink); font-size: 11px; font-weight: 800; cursor: pointer; }
+.tajweed-legend-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; margin-top: 12px; }
+.tajweed-legend-item { display: flex; align-items: center; gap: 7px; min-width: 0; color: var(--ink-soft); font-size: 10px; line-height: 1.45; }
+.tajweed-legend-item .tajweed-token { flex: 0 0 auto; font-size: 15px; line-height: 1; }
+.tajweed-legend > p { margin: 12px 0 0; color: var(--muted); font-size: 9px; line-height: 1.6; }
+.tajweed-token { font-weight: 700; text-decoration: none; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.tajweed-h, .tajweed-s, .tajweed-l { color: #777777; }
+.tajweed-n { color: #537FFF; }
+.tajweed-p { color: #4050FF; }
+.tajweed-m { color: #000EBC; }
+.tajweed-q { color: #DD0008; }
+.tajweed-o { color: #2144C1; }
+.tajweed-c { color: #D500B7; }
+.tajweed-f { color: #9400A8; }
+.tajweed-w { color: #58B800; }
+.tajweed-i { color: #168AB8; }
+.tajweed-a { color: #169777; }
+.tajweed-u { color: #169200; }
+.tajweed-d, .tajweed-b { color: #777777; }
+.tajweed-g { color: #D76510; }
+.theme-dark .tajweed-h, .theme-dark .tajweed-s, .theme-dark .tajweed-l, .theme-dark .tajweed-d, .theme-dark .tajweed-b { color: #B8C0BC; }
+.theme-dark .tajweed-n { color: #93B2FF; }
+.theme-dark .tajweed-p { color: #A7A2FF; }
+.theme-dark .tajweed-m { color: #9AA5FF; }
+.theme-dark .tajweed-q { color: #FF858A; }
+.theme-dark .tajweed-o { color: #94ACFF; }
+.theme-dark .tajweed-c { color: #F18AE1; }
+.theme-dark .tajweed-f { color: #D997F0; }
+.theme-dark .tajweed-w { color: #8FE06D; }
+.theme-dark .tajweed-i { color: #7DDBF8; }
+.theme-dark .tajweed-a { color: #67DFC5; }
+.theme-dark .tajweed-u { color: #85DF72; }
+.theme-dark .tajweed-g { color: #FFB06E; }
+@media (max-width: 540px) {
+  .tajweed-legend-grid { grid-template-columns: minmax(0, 1fr); }
+  .tajweed-mode-info { font-size: 9px; }
+}

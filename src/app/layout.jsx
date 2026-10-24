@@ -22,7 +22,9 @@ export const metadata = {
     'Asmaul Husna',
     'PWA Al-Qur’an',
     'Arah kiblat online',
-    'Kompas kiblat'
+    'Kompas kiblat',
+    'Warna tajwid digital',
+    'Belajar hukum tajwid Al-Qur’an'
   ],
   alternates: {
     canonical: '/'
@@ -102,7 +104,8 @@ const structuredData = {
     'Doa harian dan Asmaul Husna',
     'Progres tilawah dan target khatam',
     'Dukungan Progressive Web App',
-    'Arah kiblat dengan lokasi dan kompas perangkat'
+    'Arah kiblat dengan lokasi dan kompas perangkat',
+    'Warna tajwid berdasarkan anotasi edisi quran-tajweed'
   ]
 };
 

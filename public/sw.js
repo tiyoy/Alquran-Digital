@@ -1,5 +1,5 @@
 /* Lightweight app-shell service worker for the Next.js App Router. */
-const SW_VERSION = 'nurani-pwa-v26';
+const SW_VERSION = 'nurani-pwa-v27';
 const APP_SHELL_CACHE = `${SW_VERSION}-shell`;
 const API_CACHE = `${SW_VERSION}-api`;
 const RUNTIME_CACHE = `${SW_VERSION}-runtime`;
@@ -123,6 +123,23 @@ self.addEventListener('fetch', (event) => {
   // direct navigation to robots.txt/sitemap.xml could be cached as the app shell.
   // Streamed audio downloads must stay network-only; never wrap/cache the large proxy response here.
   if (url.origin === self.location.origin && url.pathname === '/api/audio-proxy') return;
+
+  // Tajweed annotations are optional but may be cached after first use so the
+  // last few annotated surahs can still be rendered offline by the client cache.
+  if (url.origin === self.location.origin && url.pathname.startsWith('/api/tajweed/')) {
+    event.respondWith((async () => {
+      const cache = await caches.open(API_CACHE);
+      const cached = await cache.match(request);
+      try {
+        const response = await fetch(request);
+        if (response && response.ok) cache.put(request, response.clone()).catch(() => {});
+        return response;
+      } catch {
+        return cached || new Response(JSON.stringify({ ok: false, message: 'Data tajwid belum tersimpan di cache browser.' }), { status: 503, headers: { 'Content-Type': 'application/json; charset=utf-8' } });
+      }
+    })());
+    return;
+  }
 
   if (url.origin === self.location.origin && (
     url.pathname.startsWith('/_next/') ||
