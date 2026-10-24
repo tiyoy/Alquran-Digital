@@ -1119,3 +1119,48 @@ h1, h2, h3, p { margin-top: 0; }
   .tajweed-legend-grid { grid-template-columns: minmax(0, 1fr); }
   .tajweed-mode-info { font-size: 9px; }
 }
+
+
+/* Interactive tajweed study mode: selected annotated tokens reveal sourced explanations. */
+.tajweed-interactive-token {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline;
+  margin: 0;
+  padding: 0 1px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  font: inherit;
+  line-height: inherit;
+  text-align: inherit;
+  vertical-align: baseline;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.tajweed-interactive-token:hover { background: color-mix(in srgb, var(--emerald) 10%, transparent); }
+.tajweed-interactive-token:focus-visible { outline: 2px solid var(--emerald); outline-offset: 2px; }
+.tajweed-interactive-token.is-selected { background: color-mix(in srgb, var(--emerald) 15%, transparent); text-decoration: underline dotted var(--emerald); text-decoration-thickness: 2px; text-underline-offset: 3px; }
+.tajweed-learning-hint { display: flex; align-items: flex-start; gap: 7px; margin: 9px 0 0; padding: 9px 10px; border-radius: 10px; color: var(--ink-soft); background: color-mix(in srgb, var(--emerald) 7%, var(--surface-muted)); font-size: 10px; line-height: 1.55; }
+.tajweed-learning-hint svg { flex: 0 0 auto; margin-top: 1px; color: var(--emerald); }
+.tajweed-lesson-card { margin: 8px 0 15px; padding: 13px; border: 1px solid color-mix(in srgb, var(--emerald) 28%, var(--line)); border-radius: 13px; background: color-mix(in srgb, var(--emerald) 4%, var(--surface)); color: var(--ink); box-shadow: 0 5px 18px rgba(0,0,0,.035); }
+.tajweed-lesson-heading { display: flex; align-items: flex-start; gap: 10px; }
+.tajweed-lesson-swatch { flex: 0 0 auto; margin-top: 2px; font-size: 24px; line-height: 1; }
+.tajweed-lesson-title { flex: 1 1 auto; min-width: 0; }
+.tajweed-lesson-title > small { display: block; margin: 0 0 3px; color: var(--muted); font-size: 9px; font-weight: 850; letter-spacing: .05em; }
+.tajweed-lesson-title h3 { margin: 0; color: var(--ink); font-size: 14px; font-weight: 850; line-height: 1.4; }
+.tajweed-lesson-title > span { display: block; margin-top: 2px; color: var(--muted); font-family: 'Noto Naskh Arabic', serif; font-size: 17px; }
+.tajweed-lesson-close { flex: 0 0 auto; }
+.tajweed-lesson-example { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 12px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.tajweed-lesson-example > span { color: var(--muted); font-size: 10px; }
+.tajweed-lesson-example > strong { max-width: 70%; color: var(--ink); font-family: 'Noto Naskh Arabic', serif; font-size: 23px; font-weight: 700; text-align: right; overflow-wrap: anywhere; }
+.tajweed-lesson-details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 10px; }
+.tajweed-lesson-details > div { min-width: 0; padding: 10px; border-radius: 10px; background: var(--surface-muted); }
+.tajweed-lesson-details strong { display: block; margin-bottom: 4px; color: var(--ink); font-size: 10px; }
+.tajweed-lesson-details p { margin: 0; color: var(--ink-soft); font-size: 11px; line-height: 1.65; }
+.tajweed-lesson-note { margin: 10px 0 0; color: var(--muted); font-size: 9px; line-height: 1.6; }
+@media (max-width: 540px) {
+  .tajweed-lesson-card { padding: 11px; }
+  .tajweed-lesson-details { grid-template-columns: minmax(0, 1fr); }
+  .tajweed-lesson-example > strong { font-size: 21px; }
+}

@@ -15,7 +15,7 @@
   <img alt="Tailwind CSS" src="https://img.shields.io/badge/Tailwind_CSS-v3-06B6D4?logo=tailwindcss&logoColor=white" />
   <img alt="PWA" src="https://img.shields.io/badge/PWA-Installable-5A0FC8?logo=pwa&logoColor=white" />
   <img alt="Bahasa Indonesia" src="https://img.shields.io/badge/Bahasa-Indonesia-059669" />
-  <img alt="Versi aplikasi 1.16.1" src="https://img.shields.io/badge/Versi-1.16.1-059669" />
+  <img alt="Versi aplikasi 1.17.0" src="https://img.shields.io/badge/Versi-1.17.0-059669" />
 </p>
 
 <p align="center">
@@ -46,8 +46,20 @@ Setiap doa harian juga memiliki URL individual, misalnya `/doa/1-doa-sebelum-mak
 
 Next.js membangun 114 route dari metadata surah lokal. Setiap route menyediakan title, deskripsi, canonical URL, Open Graph, dan Twitter Card khusus. Daftar surah menampilkan anchor HTML yang bisa diikuti crawler, sedangkan klik normal tetap membuka pembaca di dalam aplikasi tanpa reload.
 
-## Fitur terbaru — v1.16.1
+## Fitur terbaru — v1.17.0 (Mode Belajar Tajwid Interaktif)
 
+- Menambahkan sakelar **Mode belajar tajwid**. Saat aktif, pengguna dapat mengetuk penanda berwarna pada teks ayat.
+- Kartu belajar menampilkan jenis hukum, nama Arab jika tersedia, cuplikan penanda yang dipilih, ciri pengenalan, dan ringkasan cara membaca.
+- Keterangan menggunakan aturan yang sama dengan tabel Panduan Warna Tajwid; aplikasi tidak menginferensikan hukum baru.
+- Preferensi mode belajar ikut tersimpan dalam `aq:reader-prefs` dan backup JSON lokal.
+- Service worker dinaikkan ke `nurani-pwa-v30`.
+- Dokumentasi: `docs/TAJWEED-INTERACTIVE-LEARNING.md`.
+
+Sebelum deploy, jalankan `npm run lint` dan `npm run build`, lalu uji beberapa penanda tajwid di ponsel dan desktop.
+
+## Fitur terbaru — v1.16.2
+
+- Menu **Panduan warna tajwid** tersedia di setiap halaman surah, baik mode warna tajwid aktif maupun nonaktif. Tabel menjelaskan warna aktual yang ditampilkan, jenis/hukum, ciri pengenalan, serta ringkasan cara membaca untuk 17 penanda edisi `quran-tajweed`; layout responsif di desktop dan ponsel.
 - URL detail individual untuk doa harian dengan pola `/doa/{id}-{slug-judul}`, contoh `/doa/1-doa-sebelum-makan`.
 - Setiap kartu doa memiliki aksi **Bagikan doa** dan **Buka doa**.
 - Halaman doa individual menyediakan bacaan Arab, Latin, terjemahan, sumber, tombol salin, dan tombol berbagi.
@@ -58,14 +70,14 @@ Next.js membangun 114 route dari metadata surah lokal. Setiap route menyediakan 
 - Catatan dibatasi 2.000 karakter per ayat dan 500 entri, disimpan di `localStorage`, serta tidak ikut terhapus saat progres khatam direset.
 - Fitur **Cadangkan & Pulihkan Data** untuk mengekspor dan mengimpor bookmark, catatan tadabbur, progres tilawah, posisi bacaan terakhir, target khatam, favorit Asmaul Husna, serta preferensi pembaca dalam file JSON tervalidasi.
 - File cadangan dibatasi 5 MB, hanya menerima key data Nurani yang diizinkan, dan tidak menyertakan cache katalog surah/doa maupun data surah offline yang khusus untuk perangkat. Kategori yang ada pada file menggantikan kategori sejenis; kategori yang tidak ada dibiarkan tetap.
-- Service worker versi aktif menggunakan `nurani-pwa-v27`; cache audio offline memakai namespace stabil terpisah.
+- Service worker versi aktif menggunakan `nurani-pwa-v29`; cache audio offline memakai namespace stabil terpisah.
 - Menambahkan pengelola konten offline: jumlah cache surah, estimasi penyimpanan, daftar surah tersimpan, hapus per surah, dan bersihkan cache ayat tanpa menghapus bookmark/catatan/progres.
 - Tombol Simpan offline mencoba menyimpan rute pembaca surah dan ayat untuk navigasi langsung ketika jaringan tidak tersedia.
 - Unduhan audio murottal per surah: pilih qari, lihat progres unduhan, dan simpan audio hingga 80 MB per file dengan batas total 200 MB. Audio dapat diputar dari cache ketika offline.
 - Pengaturan → Kelola konten offline menampilkan ukuran, qari, status cache audio, serta aksi hapus per file atau semua audio tanpa menghapus cache ayat dan data pribadi.
 - **Mode hemat audio per ayat**: gunakan ikon unduh pada setiap kartu ayat untuk menyimpan audio ayat yang dibutuhkan tanpa mengunduh satu surah penuh. Pemutaran ayat memakai cache lokal saat offline jika file tersebut telah diunduh. Audio penuh dan audio per ayat mempunyai entri pengelolaan terpisah; batas tetap 80 MiB per track dan 200 MiB total.
 - Proxy audio same-origin mendukung path MP3 penuh dan per ayat dari namespace audio resmi `cdn.equran.id`; sumber di luar host/path yang diizinkan ditolak.
-- Service worker kini `nurani-pwa-v27`, sementara nama cache audio offline tetap stabil antardeployment.
+- Service worker kini `nurani-pwa-v29`, sementara nama cache audio offline tetap stabil antardeployment.
 - **Arah Kiblat** di `/arah-kiblat`: hitung azimuth dari lokasi perangkat, gunakan sensor kompas jika browser mendukung, dan tidak menyimpan koordinat lokasi ke `localStorage` maupun mengirimnya ke server.
 - **Warna tajwid digital**: sakelar di Pengaturan bacaan menampilkan penanda dari edisi eksplisit `quran-tajweed`, dengan legenda 17 kode warna, cache lokal tiga surah terakhir, dan fallback ke teks standar saat data gagal dimuat. Aplikasi tidak menebak hukum tajwid dari teks Arab dan tidak mengubah teks mushaf yang ditampilkan di mode standar.
 

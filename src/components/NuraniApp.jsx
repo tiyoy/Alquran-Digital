@@ -59,9 +59,17 @@ const PRAYERS = [
 ];
 
 const EMPTY_INITIAL_VERSES = [];
-function TajweedArabicText({ text }) {
+function TajweedArabicText({ text, interactive = false, onRuleSelect, selectedRuleCode = null, selectedExcerpt = '' }) {
   const parts = useMemo(() => parseTajweedMarkup(text), [text]);
-  return <>{parts.map((part, index) => <span key={`${part.code || 'plain'}-${index}`} className={part.code ? `tajweed-token tajweed-${part.code}` : 'tajweed-plain'} title={part.rule?.description || undefined}>{part.text}</span>)}</>;
+  return <>{parts.map((part, index) => {
+    const key = `${part.code || 'plain'}-${index}`;
+    const selected = Boolean(part.code && selectedRuleCode === part.code && selectedExcerpt === part.text);
+    const title = part.rule ? `${part.rule.label}: ${part.rule.reading}` : undefined;
+    if (interactive && part.code && part.rule && typeof onRuleSelect === 'function') {
+      return <button type="button" key={key} className={`tajweed-token tajweed-interactive-token tajweed-${part.code}${selected ? ' is-selected' : ''}`} title={title} aria-label={`Pelajari hukum ${part.rule.label}`} aria-pressed={selected} onClick={() => onRuleSelect({ rule: part.rule, excerpt: part.text })}>{part.text}</button>;
+    }
+    return <span key={key} className={part.code ? `tajweed-token tajweed-${part.code}` : 'tajweed-plain'} title={title}>{part.text}</span>;
+  })}</>;
 }
 function mergeInitialDua(rows, initialDua) {
   if (!initialDua) return rows;
@@ -226,6 +234,8 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
   const [latinVisible, setLatinVisible] = useState(true);
   const [translationVisible, setTranslationVisible] = useState(true);
   const [tajweedEnabled, setTajweedEnabled] = useState(false);
+  const [tajweedLearningMode, setTajweedLearningMode] = useState(false);
+  const [selectedTajweedLesson, setSelectedTajweedLesson] = useState(null);
   const [tajweedCache, setTajweedCache] = useState({});
   const [tajweedLoadingSurah, setTajweedLoadingSurah] = useState(null);
   const [tajweedErrorSurah, setTajweedErrorSurah] = useState(null);
@@ -398,7 +408,8 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
       setArabicVisible(prefs.arabicVisible !== false);
       setLatinVisible(prefs.latinVisible !== false);
       setTranslationVisible(prefs.translationVisible !== false);
-      setTajweedEnabled(prefs.tajweedEnabled === true);
+      setTajweedLearningMode(prefs.tajweedLearningMode === true);
+      setTajweedEnabled(prefs.tajweedEnabled === true || prefs.tajweedLearningMode === true);
       setArabicSize(Number(prefs.arabicSize) || 32);
       setLatinSize(Math.min(30, Math.max(12, Number(prefs.latinSize) || 18)));
       setTranslationSize(Number(prefs.translationSize) || 15);
@@ -707,8 +718,8 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
     writeLocal('aq:favorite-asma', favoriteAsma);
   }, [favoriteAsma]);
   useEffect(() => {
-    writeLocal('aq:reader-prefs', { arabicVisible, latinVisible, translationVisible, tajweedEnabled, arabicSize, latinSize, translationSize, qariIndex });
-  }, [arabicVisible, latinVisible, translationVisible, tajweedEnabled, arabicSize, latinSize, translationSize, qariIndex]);
+    writeLocal('aq:reader-prefs', { arabicVisible, latinVisible, translationVisible, tajweedEnabled, tajweedLearningMode, arabicSize, latinSize, translationSize, qariIndex });
+  }, [arabicVisible, latinVisible, translationVisible, tajweedEnabled, tajweedLearningMode, arabicSize, latinSize, translationSize, qariIndex]);
   useEffect(() => {
     if (!audioInfo || !audioRef.current) return;
     const element = audioRef.current;
@@ -788,7 +799,7 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
       : surahValue;
     if (!surah) return;
     const canUseServerRows = Number(surah.nomor) === safeInitialSurahNumber && safeInitialVerseRows.length > 0;
-    setActiveTab('quran'); setSelectedSurah(surah); setVerses(canUseServerRows ? safeInitialVerseRows : []); setVerseLoading(!canUseServerRows); setReaderSettingsOpen(false);
+    setActiveTab('quran'); setSelectedSurah(surah); setSelectedTajweedLesson(null); setVerses(canUseServerRows ? safeInitialVerseRows : []); setVerseLoading(!canUseServerRows); setReaderSettingsOpen(false);
     setJumpVerse(String(verseNumber || 1));
     pendingJumpRef.current = Number(verseNumber || 1);
     setLastRead({ surahId: Number(surah.nomor), surahName: surah.namaLatin, verse: Number(verseNumber || 1), updatedAt: Date.now() });
@@ -1679,7 +1690,7 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
   };
   const exportLocalBackup = () => {
     try {
-      const backup = createLocalBackup(window.localStorage, '1.16.0');
+      const backup = createLocalBackup(window.localStorage, '1.17.0');
       const entryCount = Object.keys(backup.data).length;
       if (!entryCount) {
         showToast('Belum ada data Nurani yang bisa dicadangkan.');
@@ -1745,7 +1756,7 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
     }
   };
   const resetReaderSettings = () => {
-    setArabicVisible(true); setLatinVisible(true); setTranslationVisible(true); setTajweedEnabled(false); setArabicSize(32); setLatinSize(18); setTranslationSize(15);
+    setArabicVisible(true); setLatinVisible(true); setTranslationVisible(true); setTajweedEnabled(false); setTajweedLearningMode(false); setSelectedTajweedLesson(null); setArabicSize(32); setLatinSize(18); setTranslationSize(15);
     showToast('Pengaturan bacaan dikembalikan ke awal.');
   };
 
@@ -1928,7 +1939,9 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
           <label className="toggle-setting"><span><strong>Latin</strong><small>Transliterasi</small></span><input type="checkbox" checked={latinVisible} onChange={(event) => setLatinVisible(event.target.checked)} /><span className="toggle-ui" /></label>
           <label className="toggle-setting"><span><strong>Terjemahan</strong><small>Bahasa Indonesia</small></span><input type="checkbox" checked={translationVisible} onChange={(event) => setTranslationVisible(event.target.checked)} /><span className="toggle-ui" /></label>
         </div>
-        <label className="toggle-setting tajweed-mode-setting"><span><strong><Palette size={14} /> Warna tajwid</strong><small>Penanda dari edisi quran-tajweed</small></span><input type="checkbox" checked={tajweedEnabled} onChange={(event) => { setTajweedEnabled(event.target.checked); if (!event.target.checked) { setTajweedErrorSurah(null); setTajweedLoadingSurah(null); } }} /><span className="toggle-ui" /></label>
+        <label className="toggle-setting tajweed-mode-setting"><span><strong><Palette size={14} /> Warna tajwid</strong><small>Penanda dari edisi quran-tajweed</small></span><input type="checkbox" checked={tajweedEnabled} onChange={(event) => { const enabled = event.target.checked; setTajweedEnabled(enabled); if (!enabled) { setTajweedLearningMode(false); setSelectedTajweedLesson(null); setTajweedErrorSurah(null); setTajweedLoadingSurah(null); } }} /><span className="toggle-ui" /></label>
+        <label className="toggle-setting tajweed-mode-setting"><span><strong><BookOpen size={14} /> Mode belajar tajwid</strong><small>Ketuk bagian berwarna untuk melihat ciri hukum dan cara membacanya</small></span><input type="checkbox" checked={tajweedLearningMode} onChange={(event) => { const enabled = event.target.checked; setTajweedLearningMode(enabled); if (enabled) setTajweedEnabled(true); else setSelectedTajweedLesson(null); }} /><span className="toggle-ui" /></label>
+        {tajweedLearningMode && <p className="tajweed-learning-hint"><Info size={14} /> Setelah warna tajwid dimuat, ketuk salah satu huruf berwarna pada ayat. Penjelasan akan muncul tepat di bawah ayat tersebut.</p>}
         {tajweedEnabled && <div className="tajweed-mode-info" role="status">
           {tajweedLoadingSurah === Number(selectedSurah?.nomor) && <><LoaderCircle size={14} className="spin" /> Memuat penanda tajwid untuk surah ini. Teks standar tetap ditampilkan selama proses berlangsung.</>}
           {tajweedErrorSurah === Number(selectedSurah?.nomor) && <><Info size={14} /> Data warna tajwid belum berhasil dimuat. Teks standar tetap tersedia. <button type="button" onClick={() => { setTajweedErrorSurah(null); setTajweedCache((current) => ({ ...current })); }}>Coba lagi</button></>}
@@ -1952,6 +1965,12 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
         {verses.map((verse, index) => {
           const verseKey = `${selectedSurah?.nomor}:${verse.nomorAyat}`;
           const tajweedVerseText = tajweedCache[Number(selectedSurah?.nomor)]?.ayahs?.find((row) => Number(row.numberInSurah) === Number(verse.nomorAyat))?.text || '';
+          const selectedLessonMatchesVerse = tajweedLearningMode
+            && Number(selectedTajweedLesson?.surahNumber) === Number(selectedSurah?.nomor)
+            && Number(selectedTajweedLesson?.verseNumber) === Number(verse.nomorAyat);
+          const selectedTajweedRule = selectedLessonMatchesVerse
+            ? TAJWEED_RULES.find((rule) => rule.code === selectedTajweedLesson?.code) || null
+            : null;
           const activeReciterId = QARI_IDS[qariIndex] || '05';
           const savedVerseTrack = offlineAudioTracks.find((track) => Number(track.surahId) === Number(selectedSurah?.nomor)
             && track.type === 'verse'
@@ -1968,7 +1987,23 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
             && Number(sharedVerseTarget) === Number(verse.nomorAyat);
           return <article id={`verse-${selectedSurah?.nomor}-${verse.nomorAyat}`} className={`verse-card card-surface ${isPlayingVerse ? 'is-playing' : ''} ${isSharedVerseTarget ? 'is-shared-target' : ''}`} key={`${selectedSurah?.nomor}-${verse.nomorAyat}`}>
             <div className="verse-card-top"><div className="verse-number"><span>{verse.nomorAyat}</span></div><div className="verse-meta"><span>{selectedSurah?.namaLatin} · Ayat {verse.nomorAyat}</span>{isPlayingVerse && <span className="now-playing"><AudioLines size={13} /> Sedang diputar</span>}</div><div className="verse-quick-actions"><button className="icon-button small" aria-label="Putar ayat" title="Putar ayat" onClick={() => void playVerse(verse, index)}>{isPlayingVerse && audioPlaying ? <AudioLines size={16} /> : <Play size={16} />}</button><button className={`icon-button small ${bookmarkedVerses.includes(verseKey) ? 'is-saved' : ''}`} aria-label="Bookmark ayat" onClick={() => toggleVerseBookmark(verse.nomorAyat)}><Bookmark size={16} fill={bookmarkedVerses.includes(verseKey) ? 'currentColor' : 'none'} /></button><button className="icon-button small" aria-label="Salin teks ayat" title="Salin teks ayat" onClick={() => copyVerse(verse)}><Copy size={15} /></button><button className={`icon-button small ${verseNotes[verseKey] ? 'has-verse-note' : ''}`} aria-label={verseNotes[verseKey] ? "Edit catatan tadabbur" : "Tambah catatan tadabbur"} title={verseNotes[verseKey] ? "Edit catatan tadabbur" : "Tambah catatan tadabbur"} onClick={() => openVerseNoteEditor(selectedSurah, verse)}><PencilLine size={15} /></button><button className="icon-button small" aria-label="Bagikan ayat" title="Bagikan ayat" onClick={() => shareVerse(verse)}><Share2 size={15} /></button><button className="icon-button small tafsir-action" aria-label="Buka tafsir ayat" title="Buka tafsir ayat" onClick={() => openTafsir(verse)}><MoreHorizontal size={17} /></button></div></div>
-            {arabicVisible && <p className={`verse-arabic ${tajweedEnabled && tajweedVerseText ? 'has-tajweed-colors' : ''}`} dir="rtl" lang="ar" style={{ fontSize: `${arabicSize}px` }}>{tajweedEnabled && tajweedVerseText ? <TajweedArabicText text={tajweedVerseText} /> : (cleanArabicText(verse.teksArab) || '—')}</p>}
+            {arabicVisible && <p className={`verse-arabic ${tajweedEnabled && tajweedVerseText ? 'has-tajweed-colors' : ''}`} dir="rtl" lang="ar" style={{ fontSize: `${arabicSize}px` }}>{tajweedEnabled && tajweedVerseText ? <TajweedArabicText
+              text={tajweedVerseText}
+              interactive={tajweedLearningMode}
+              selectedRuleCode={selectedLessonMatchesVerse ? selectedTajweedLesson?.code : null}
+              selectedExcerpt={selectedLessonMatchesVerse ? selectedTajweedLesson?.excerpt : ''}
+              onRuleSelect={({ rule, excerpt }) => setSelectedTajweedLesson({ surahNumber: Number(selectedSurah?.nomor), verseNumber: Number(verse.nomorAyat), code: rule.code, excerpt })}
+            /> : (cleanArabicText(verse.teksArab) || '—')}</p>}
+            {selectedTajweedRule && <section className="tajweed-lesson-card" aria-live="polite" aria-label={`Penjelasan ${selectedTajweedRule.label}`}>
+              <div className="tajweed-lesson-heading">
+                <span className={`tajweed-lesson-swatch tajweed-token tajweed-${selectedTajweedRule.code}`} aria-hidden="true">●</span>
+                <div className="tajweed-lesson-title"><small>MODE BELAJAR · {selectedSurah?.namaLatin} AYAT {verse.nomorAyat}</small><h3>{selectedTajweedRule.label}</h3>{selectedTajweedRule.arabicName && <span lang="ar" dir="rtl">{selectedTajweedRule.arabicName}</span>}</div>
+                <button type="button" className="icon-button small tajweed-lesson-close" onClick={() => setSelectedTajweedLesson(null)} aria-label="Tutup penjelasan tajwid"><X size={16} /></button>
+              </div>
+              <div className="tajweed-lesson-example"><span>Contoh yang disentuh</span><strong lang="ar" dir="rtl">{selectedTajweedLesson.excerpt}</strong></div>
+              <div className="tajweed-lesson-details"><div><strong>Ciri pengenalan</strong><p>{selectedTajweedRule.recognition}</p></div><div><strong>Cara membaca</strong><p>{selectedTajweedRule.reading}</p></div></div>
+              <p className="tajweed-lesson-note">Ringkasan ini mengikuti penanda edisi quran-tajweed yang digunakan Nurani. Untuk variasi yang bergantung pada riwayat, ikuti mushaf dan guru yang Anda gunakan.</p>
+            </section>}
             {latinVisible && verse.teksLatin && <p className="verse-latin" style={{ fontSize: `${latinSize}px` }}>{verse.teksLatin}</p>}
             {translationVisible && verse.teksIndonesia && <p className="verse-translation" style={{ fontSize: `${translationSize}px` }}>{verse.teksIndonesia}</p>}
             {!arabicVisible && !latinVisible && !translationVisible && <div className="hifz-hidden-note"><EyeOffIcon /> Mode hafalan aktif — semua teks disembunyikan.</div>}
