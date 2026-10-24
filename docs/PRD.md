@@ -112,8 +112,11 @@ alquran-digital-nextjs/
 
 ### 7. Roadmap Pengembangan Masa Depan (Future Enhancements)
 
-- [ ] **PWA (Progressive Web App)**: Dukungan *Service Worker* agar ayat Al-Qur'an dan jadwal shalat dapat diakses secara *offline*.
+- [x] **PWA (Progressive Web App)**: Dukungan *Service Worker* untuk cache sebagian ayat dan jadwal shalat agar konten yang telah dimuat dapat diakses secara *offline*.
 - [ ] **Warna Tajwid Digital**: Highlight warna otomatis untuk hukum tajwid (Ikhfa, Idgham, Qalqalah, dll.).
 - [ ] **Penanda Kompas Kiblat (Qibla Finder)**: Menggunakan API Geolocation & Device Orientation pada ponsel.
-- [ ] **Fitur Catatan Pribadi (Verse Notes)**: Memungkinkan pengguna menambahkan catatan atau tadabbur pada ayat tertentu.
+- [x] **Fitur Catatan Pribadi (Verse Notes)**: Pengguna dapat menambahkan, mengedit, menghapus, dan meninjau catatan tadabbur pada ayat tertentu; penyimpanan lokal per perangkat.
 - [ ] **Unduh Audio Murottal**: Opsi untuk mengunduh audio per surah untuk didengarkan secara *offline*.
+
+### Pembaruan implementasi v1.8.0
+- **Catatan pribadi per ayat (Tadabbur Notes):** pengguna dapat membuat, mengedit, menghapus, dan meninjau catatan yang disimpan lokal per ayat. Catatan tidak tersinkron ke server/perangkat lain.

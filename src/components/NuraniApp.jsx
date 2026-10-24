@@ -7,7 +7,7 @@ import {
   ChevronDown, ChevronLeft, ChevronRight, Clock3, Copy, Download, HandHeart,
   Headphones, Heart, Home, Info, ListFilter, LoaderCircle, MapPin, Minus, Moon,
   MoreHorizontal, Pause, Play, Plus, RefreshCw, Search, Settings2, ShieldCheck,
-  Share2, SlidersHorizontal, Sparkles, Sun, Wifi, WifiOff, X, Repeat, Target
+  Share2, SlidersHorizontal, Sparkles, Sun, Wifi, WifiOff, X, Repeat, Target, StickyNote, PencilLine, Trash2
 } from 'lucide-react';
 import { asmaulHusna, enforceBeforeMealDua, fallbackDuas, fallbackSurahs, MIN_DUA_CATALOG_SIZE } from '@/lib/data';
 import { extractDuaRows, isUsableDua, normalizeDua } from '@/lib/duas';
@@ -77,6 +77,26 @@ function readLocal(key, fallback) {
 }
 function writeLocal(key, value) {
   try { window.localStorage.setItem(key, JSON.stringify(value)); return true; } catch { return false; /* Storage can be disabled or full. */ }
+}
+function normalizeVerseNotes(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const valid = Object.entries(value).flatMap(([key, item]) => {
+    const match = /^(\d{1,3}):(\d{1,3})$/.exec(String(key));
+    if (!match || !item || typeof item !== 'object') return [];
+    const surahId = Number(match[1]);
+    const verseNumber = Number(match[2]);
+    const text = typeof item.text === 'string' ? item.text.trim().slice(0, 2000) : '';
+    if (surahId < 1 || surahId > 114 || verseNumber < 1 || verseNumber > 286 || !text) return [];
+    return [[`${surahId}:${verseNumber}`, {
+      surahId,
+      verseNumber,
+      surahName: String(item.surahName || `Surah ${surahId}`).slice(0, 80),
+      text,
+      updatedAt: Number.isFinite(Number(item.updatedAt)) ? Number(item.updatedAt) : 0
+    }]];
+  });
+  valid.sort((a, b) => b[1].updatedAt - a[1].updatedAt);
+  return Object.fromEntries(valid.slice(0, 500));
 }
 function toPrayerTimes(raw) {
   const container = raw?.jadwal ?? raw?.schedule ?? raw ?? {};
@@ -175,6 +195,10 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
   const [qariIndex, setQariIndex] = useState(0);
   const [bookmarkedSurahs, setBookmarkedSurahs] = useState([]);
   const [bookmarkedVerses, setBookmarkedVerses] = useState([]);
+  const [verseNotes, setVerseNotes] = useState({});
+  const [editingVerseNote, setEditingVerseNote] = useState(null);
+  const [verseNoteDraft, setVerseNoteDraft] = useState('');
+  const [verseNotesModalOpen, setVerseNotesModalOpen] = useState(false);
   const [lastRead, setLastRead] = useState(null);
   const [readVerseKeys, setReadVerseKeys] = useState([]);
   const [readingDays, setReadingDays] = useState({});
@@ -275,6 +299,7 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
     setTheme(readLocal('aq:theme', 'light'));
     setBookmarkedSurahs(readLocal('aq:bookmarked-surahs', []));
     setBookmarkedVerses(readLocal('aq:bookmarked-verses', []));
+    setVerseNotes(normalizeVerseNotes(readLocal('aq:verse-notes', {})));
     setLastRead(readLocal('aq:last-read', null));
     const savedReadVerseKeys = readLocal('aq:read-verse-keys', []);
     setReadVerseKeys(Array.isArray(savedReadVerseKeys) ? [...new Set(savedReadVerseKeys.filter((key) => /^\d{1,3}:\d{1,3}$/.test(String(key))))].slice(-TOTAL_QURAN_VERSES) : []);
@@ -523,6 +548,9 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
     writeLocal('aq:bookmarked-verses', bookmarkedVerses);
   }, [bookmarkedVerses]);
   useEffect(() => {
+    writeLocal('aq:verse-notes', verseNotes);
+  }, [verseNotes]);
+  useEffect(() => {
     writeLocal('aq:last-read', lastRead);
   }, [lastRead]);
   useEffect(() => {
@@ -579,6 +607,8 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
     return !q || [name.latin, name.arabic, name.meaning, name.number].join(' ').toLowerCase().includes(q)
       || (q === 'favorit' && favoriteAsma.includes(name.number));
   }), [asmaQuery, favoriteAsma]);
+  const allVerseNotes = useMemo(() => Object.values(verseNotes).sort((a, b) => b.updatedAt - a.updatedAt), [verseNotes]);
+  const recentVerseNotes = useMemo(() => allVerseNotes.slice(0, 3), [allVerseNotes]);
   const todayKey = jakartaDateKey();
   const todayReadCount = Array.isArray(readingDays?.[todayKey]) ? readingDays[todayKey].length : 0;
   const completedVerseCount = Math.min(readVerseKeys.length, TOTAL_QURAN_VERSES);
@@ -697,6 +727,49 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
     const key = `${selectedSurah.nomor}:${number}`;
     setBookmarkedVerses((previous) => previous.includes(key) ? previous.filter((id) => id !== key) : [...previous, key]);
     showToast(bookmarkedVerses.includes(key) ? 'Bookmark ayat dihapus.' : 'Ayat disimpan ke bookmark.');
+  };
+  const openVerseNoteEditor = (surah, verse) => {
+    const surahId = Number(surah?.nomor);
+    const verseNumber = Number(verse?.nomorAyat);
+    if (!Number.isInteger(surahId) || surahId < 1 || surahId > 114 || !Number.isInteger(verseNumber) || verseNumber < 1) return;
+    const key = `${surahId}:${verseNumber}`;
+    setEditingVerseNote({ key, surahId, verseNumber, surahName: surah?.namaLatin || `Surah ${surahId}` });
+    setVerseNoteDraft(verseNotes[key]?.text || '');
+  };
+  const saveVerseNote = () => {
+    if (!editingVerseNote) return;
+    const text = verseNoteDraft.trim();
+    if (!text) { showToast('Tulis catatan terlebih dahulu. Untuk menghapus, gunakan tombol Hapus catatan.'); return; }
+    const nextNotes = normalizeVerseNotes({
+      ...verseNotes,
+      [editingVerseNote.key]: {
+        ...editingVerseNote,
+        text: text.slice(0, 2000),
+        updatedAt: Date.now()
+      }
+    });
+    setVerseNotes(nextNotes);
+    const persisted = writeLocal('aq:verse-notes', nextNotes);
+    setEditingVerseNote(null);
+    setVerseNoteDraft('');
+    showToast(persisted ? 'Catatan tadabbur tersimpan di perangkat ini.' : 'Catatan ditampilkan, tetapi penyimpanan browser gagal. Periksa ruang penyimpanan.');
+  };
+  const deleteVerseNote = (key) => {
+    const nextNotes = { ...verseNotes };
+    delete nextNotes[key];
+    setVerseNotes(nextNotes);
+    const persisted = writeLocal('aq:verse-notes', nextNotes);
+    if (editingVerseNote?.key === key) {
+      setEditingVerseNote(null);
+      setVerseNoteDraft('');
+    }
+    showToast(persisted ? 'Catatan tadabbur dihapus.' : 'Catatan dihapus dari tampilan, tetapi perubahan gagal disimpan di browser.');
+  };
+  const openVerseFromNote = (note) => {
+    setVerseNotesModalOpen(false);
+    setEditingVerseNote(null);
+    setVerseNoteDraft('');
+    void openSurah(note.surahId, note.verseNumber);
   };
   const playVerse = (verse, index) => {
     const src = chooseAudio(verse.audio, qariIndex);
@@ -986,6 +1059,18 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
           <button className="round-action" aria-label="Buka bacaan terakhir" onClick={() => openSurah(lastRead?.surahId || 1, lastRead?.verse || 1)}><ArrowRight size={19} /></button>
         </div>
       </section>
+      {allVerseNotes.length > 0 && <section className="section-block verse-notes-home-section">
+        <div className="section-heading"><div><p className="eyebrow">CATATAN PRIBADI</p><h2>Catatan tadabbur</h2></div><span className="tiny-status"><StickyNote size={13} /> {allVerseNotes.length} catatan</span></div>
+        <div className="verse-notes-home-list">
+          {recentVerseNotes.map((note) => <button type="button" className="verse-note-home-card card-surface" key={`${note.surahId}:${note.verseNumber}`} onClick={() => openVerseFromNote(note)}>
+            <span className="verse-note-home-icon"><StickyNote size={18} /></span>
+            <span className="verse-note-home-copy"><strong>{note.surahName} · Ayat {note.verseNumber}</strong><span>{note.text}</span></span>
+            <ArrowRight size={17} />
+          </button>)}
+        </div>
+        {allVerseNotes.length > 3 && <button type="button" className="text-link verse-notes-view-all" onClick={() => setVerseNotesModalOpen(true)}>Lihat semua {allVerseNotes.length} catatan <ArrowRight size={14} /></button>}
+        <p className="verse-notes-local-note"><ShieldCheck size={13} /> Catatan hanya tersimpan di perangkat/browser ini.</p>
+      </section>}
 
       <section className="offline-summary card-surface">
         <span className="offline-summary-icon">{online ? <Download size={19} /> : <WifiOff size={19} />}</span>
@@ -1054,12 +1139,14 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
           const isSharedVerseTarget = Number(selectedSurah?.nomor) === safeInitialSurahNumber
             && Number(sharedVerseTarget) === Number(verse.nomorAyat);
           return <article id={`verse-${selectedSurah?.nomor}-${verse.nomorAyat}`} className={`verse-card card-surface ${isPlayingVerse ? 'is-playing' : ''} ${isSharedVerseTarget ? 'is-shared-target' : ''}`} key={`${selectedSurah?.nomor}-${verse.nomorAyat}`}>
-            <div className="verse-card-top"><div className="verse-number"><span>{verse.nomorAyat}</span></div><div className="verse-meta"><span>{selectedSurah?.namaLatin} · Ayat {verse.nomorAyat}</span>{isPlayingVerse && <span className="now-playing"><AudioLines size={13} /> Sedang diputar</span>}</div><div className="verse-quick-actions"><button className="icon-button small" aria-label="Putar ayat" onClick={() => playVerse(verse, index)}>{isPlayingVerse && audioPlaying ? <AudioLines size={16} /> : <Play size={16} />}</button><button className={`icon-button small ${bookmarkedVerses.includes(verseKey) ? 'is-saved' : ''}`} aria-label="Bookmark ayat" onClick={() => toggleVerseBookmark(verse.nomorAyat)}><Bookmark size={16} fill={bookmarkedVerses.includes(verseKey) ? 'currentColor' : 'none'} /></button><button className="icon-button small" aria-label="Salin teks ayat" title="Salin teks ayat" onClick={() => copyVerse(verse)}><Copy size={15} /></button><button className="icon-button small" aria-label="Bagikan ayat" title="Bagikan ayat" onClick={() => shareVerse(verse)}><Share2 size={15} /></button><button className="icon-button small tafsir-action" aria-label="Buka tafsir ayat" title="Buka tafsir ayat" onClick={() => openTafsir(verse)}><MoreHorizontal size={17} /></button></div></div>
+            <div className="verse-card-top"><div className="verse-number"><span>{verse.nomorAyat}</span></div><div className="verse-meta"><span>{selectedSurah?.namaLatin} · Ayat {verse.nomorAyat}</span>{isPlayingVerse && <span className="now-playing"><AudioLines size={13} /> Sedang diputar</span>}</div><div className="verse-quick-actions"><button className="icon-button small" aria-label="Putar ayat" onClick={() => playVerse(verse, index)}>{isPlayingVerse && audioPlaying ? <AudioLines size={16} /> : <Play size={16} />}</button><button className={`icon-button small ${bookmarkedVerses.includes(verseKey) ? 'is-saved' : ''}`} aria-label="Bookmark ayat" onClick={() => toggleVerseBookmark(verse.nomorAyat)}><Bookmark size={16} fill={bookmarkedVerses.includes(verseKey) ? 'currentColor' : 'none'} /></button><button className="icon-button small" aria-label="Salin teks ayat" title="Salin teks ayat" onClick={() => copyVerse(verse)}><Copy size={15} /></button><button className={`icon-button small ${verseNotes[verseKey] ? 'has-verse-note' : ''}`} aria-label={verseNotes[verseKey] ? "Edit catatan tadabbur" : "Tambah catatan tadabbur"} title={verseNotes[verseKey] ? "Edit catatan tadabbur" : "Tambah catatan tadabbur"} onClick={() => openVerseNoteEditor(selectedSurah, verse)}><PencilLine size={15} /></button><button className="icon-button small" aria-label="Bagikan ayat" title="Bagikan ayat" onClick={() => shareVerse(verse)}><Share2 size={15} /></button><button className="icon-button small tafsir-action" aria-label="Buka tafsir ayat" title="Buka tafsir ayat" onClick={() => openTafsir(verse)}><MoreHorizontal size={17} /></button></div></div>
             {arabicVisible && <p className="verse-arabic" dir="rtl" lang="ar" style={{ fontSize: `${arabicSize}px` }}>{cleanArabicText(verse.teksArab) || '—'}</p>}
             {latinVisible && verse.teksLatin && <p className="verse-latin" style={{ fontSize: `${latinSize}px` }}>{verse.teksLatin}</p>}
             {translationVisible && verse.teksIndonesia && <p className="verse-translation" style={{ fontSize: `${translationSize}px` }}>{verse.teksIndonesia}</p>}
             {!arabicVisible && !latinVisible && !translationVisible && <div className="hifz-hidden-note"><EyeOffIcon /> Mode hafalan aktif — semua teks disembunyikan.</div>}
             {translationVisible && verse.teksIndonesia && <button className="text-link verse-tafsir-link" onClick={() => openTafsir(verse)}>Baca tafsir ayat <ArrowRight size={14} /></button>}
+            {verseNotes[verseKey] && editingVerseNote?.key !== verseKey && <div className="verse-note-preview"><div className="verse-note-title"><StickyNote size={14} /><strong>Catatan tadabbur pribadi</strong><span>Diperbarui {new Date(verseNotes[verseKey].updatedAt || Date.now()).toLocaleDateString('id-ID')}</span></div><p>{verseNotes[verseKey].text}</p><button type="button" className="text-link" onClick={() => openVerseNoteEditor(selectedSurah, verse)}>Ubah catatan <PencilLine size={13} /></button></div>}
+            {editingVerseNote?.key === verseKey && <div className="verse-note-editor"><div className="verse-note-editor-heading"><div><strong>Catatan tadabbur</strong><small>{selectedSurah?.namaLatin} · Ayat {verse.nomorAyat}</small></div><span>{verseNoteDraft.length}/2000</span></div><textarea value={verseNoteDraft} onChange={(event) => setVerseNoteDraft(event.target.value.slice(0, 2000))} maxLength={2000} rows={4} placeholder="Tulis pemahaman, refleksi, pertanyaan, atau pelajaran dari ayat ini…" aria-label={`Catatan tadabbur ${selectedSurah?.namaLatin} ayat ${verse.nomorAyat}`} /><div className="verse-note-editor-actions"><button type="button" className="button button-secondary" onClick={() => { setEditingVerseNote(null); setVerseNoteDraft(''); }}>Batal</button>{verseNotes[verseKey] && <button type="button" className="button button-danger-ghost" onClick={() => deleteVerseNote(verseKey)}><Trash2 size={14} /> Hapus</button>}<button type="button" className="button button-gold" onClick={saveVerseNote}><Check size={15} /> Simpan catatan</button></div></div>}
           </article>;
         })}
       </div>
@@ -1161,6 +1248,8 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
       <nav className="bottom-nav" aria-label="Navigasi utama">{NAV_ITEMS.map((item) => { const Icon = item.icon; const isActive = activeTab === item.id; return <a key={item.id} href={TAB_PATHS[item.id]} className={`nav-item ${isActive ? 'active' : ''}`} onClick={(event) => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return; event.preventDefault(); setActiveDuaSlug(null); setActiveTab(item.id); if (item.id !== 'quran') setSelectedSurah(null); }} aria-current={isActive ? 'page' : undefined}><span className="nav-icon-wrap"><Icon size={20} strokeWidth={isActive ? 2.4 : 1.8} /></span><span>{item.label}</span></a>; })}</nav>
 
       {settingsOpen && <div className="modal-backdrop" onClick={() => setSettingsOpen(false)}><section className="modal-card settings-modal" onClick={(event) => event.stopPropagation()}><div className="modal-header"><div><p className="eyebrow">PENGATURAN</p><h2>Preferensi aplikasi</h2></div><button className="icon-button" onClick={() => setSettingsOpen(false)} aria-label="Tutup pengaturan"><X size={19} /></button></div><button className="settings-row" onClick={() => setTheme((value) => value === 'light' ? 'dark' : 'light')}><span className="settings-row-icon">{theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}</span><span><strong>Tampilan</strong><small>{theme === 'light' ? 'Mode terang' : 'Mode gelap'}</small></span><ChevronRight size={17} /></button><button className="settings-row" onClick={installApp}><span className="settings-row-icon"><Download size={18} /></span><span><strong>Pasang aplikasi</strong><small>Tambahkan Nurani ke layar utama</small></span><ChevronRight size={17} /></button><div className="settings-note"><ShieldCheck size={16} /><span>Preferensi, riwayat bacaan, dan bookmark disimpan secara lokal di perangkat ini. Tidak perlu membuat akun.</span></div></section></div>}
+
+      {verseNotesModalOpen && <div className="modal-backdrop" onClick={() => setVerseNotesModalOpen(false)}><section className="modal-card verse-notes-modal" onClick={(event) => event.stopPropagation()}><div className="modal-header"><div><p className="eyebrow">CATATAN PRIBADI</p><h2>Semua catatan tadabbur</h2><p className="muted">{allVerseNotes.length} catatan tersimpan di perangkat ini.</p></div><button className="icon-button" onClick={() => setVerseNotesModalOpen(false)} aria-label="Tutup catatan"><X size={19} /></button></div><div className="verse-notes-modal-list">{allVerseNotes.map((note) => <div className="verse-notes-modal-item" key={`${note.surahId}:${note.verseNumber}`}><div className="verse-notes-modal-item-copy"><strong>{note.surahName} · Ayat {note.verseNumber}</strong><p>{note.text}</p><small>{new Date(note.updatedAt || Date.now()).toLocaleString('id-ID')}</small></div><div className="verse-notes-modal-item-actions"><button type="button" className="icon-button small" aria-label={`Buka ${note.surahName} ayat ${note.verseNumber}`} onClick={() => openVerseFromNote(note)}><ArrowRight size={16} /></button><button type="button" className="icon-button small note-delete-action" aria-label={`Hapus catatan ${note.surahName} ayat ${note.verseNumber}`} onClick={() => deleteVerseNote(`${note.surahId}:${note.verseNumber}`)}><Trash2 size={15} /></button></div></div>)}</div><div className="modal-footnote"><ShieldCheck size={15} /><span>Catatan hanya disimpan pada browser/perangkat ini. Catatan tidak diunggah ke server dan tidak tersinkron otomatis ke perangkat lain.</span></div></section></div>}
 
       {tafsirModal && <div className="modal-backdrop" onClick={() => setTafsirModal(null)}><section className="modal-card tafsir-modal" onClick={(event) => event.stopPropagation()}><div className="modal-header"><div><p className="eyebrow">TAFSIR KEMENAG RI</p><h2>{tafsirModal.surah?.namaLatin}{tafsirModal.verse ? ` · Ayat ${tafsirModal.verse.nomorAyat}` : ''}</h2><p className="muted">Membantu memahami pesan ayat.</p></div><button className="icon-button" onClick={() => setTafsirModal(null)} aria-label="Tutup tafsir"><X size={19} /></button></div>{tafsirModal.verse?.teksArab && <p className="tafsir-verse-arabic" dir="rtl">{tafsirModal.verse.teksArab}</p>}{tafsirLoading ? <div className="modal-loading"><LoaderCircle className="spin" size={20} /> Memuat tafsir…</div> : <div className="tafsir-copy">{tafsirModal.text || 'Teks tafsir untuk ayat ini belum tersedia pada respons API. Coba buka tafsir lengkap setelah jaringan tersambung.'}</div>}<div className="modal-footnote"><Info size={15} /><span>Gunakan tafsir sebagai sarana belajar; untuk persoalan khusus, rujuk ulama atau guru yang tepercaya.</span></div></section></div>}
 
