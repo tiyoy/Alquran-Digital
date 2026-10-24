@@ -15,7 +15,7 @@
   <img alt="Tailwind CSS" src="https://img.shields.io/badge/Tailwind_CSS-v3-06B6D4?logo=tailwindcss&logoColor=white" />
   <img alt="PWA" src="https://img.shields.io/badge/PWA-Installable-5A0FC8?logo=pwa&logoColor=white" />
   <img alt="Bahasa Indonesia" src="https://img.shields.io/badge/Bahasa-Indonesia-059669" />
-  <img alt="Versi aplikasi 1.19.0" src="https://img.shields.io/badge/Versi-1.19.0-059669" />
+  <img alt="Versi aplikasi 1.20.0" src="https://img.shields.io/badge/Versi-1.20.0-059669" />
 </p>
 
 <p align="center">
@@ -45,6 +45,14 @@ Setiap surah memiliki halaman statis dengan URL yang mudah dibagikan, misalnya:
 Setiap doa harian juga memiliki URL individual, misalnya `/doa/1-doa-sebelum-makan`, sehingga bacaan Arab, Latin, terjemahan, dan sumber dapat dibagikan langsung.
 
 Next.js membangun 114 route dari metadata surah lokal. Setiap route menyediakan title, deskripsi, canonical URL, Open Graph, dan Twitter Card khusus. Daftar surah menampilkan anchor HTML yang bisa diikuti crawler, sedangkan klik normal tetap membuka pembaca di dalam aplikasi tanpa reload.
+
+## Fitur terbaru — v1.20.0 (Pengingat Tilawah dan Doa Harian)
+
+- Menambahkan hingga 10 jadwal pengingat lokal yang dapat diberi nama, waktu, jenis (tilawah, doa harian, atau keduanya), dan hari pengulangan.
+- Pengingat yang jatuh tempo ditampilkan melalui toast saat aplikasi terlihat; jika halaman berada di latar belakang dan izin notifikasi diberikan, aplikasi mencoba menampilkan notifikasi persisten melalui service worker.
+- Pengaturan pengingat disimpan di perangkat sebagai `aq:reminders` dan disertakan pada backup JSON Nurani.
+- Pengingat lokal hanya dapat diperiksa ketika halaman/PWA berjalan. Jadwal tidak dijamin berjalan ketika browser benar-benar ditutup; pengiriman yang andal dalam kondisi itu memerlukan layanan Web Push di server.
+- Service worker diperbarui ke `nurani-pwa-v33` dan menangani klik notifikasi agar kembali ke halaman Nurani yang relevan.
 
 ## Fitur terbaru — v1.19.0 (Statistik Tilawah dan Target Harian)
 

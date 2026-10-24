@@ -1,5 +1,5 @@
 /* Lightweight app-shell service worker for the Next.js App Router. */
-const SW_VERSION = 'nurani-pwa-v32';
+const SW_VERSION = 'nurani-pwa-v33';
 const APP_SHELL_CACHE = `${SW_VERSION}-shell`;
 const API_CACHE = `${SW_VERSION}-api`;
 const RUNTIME_CACHE = `${SW_VERSION}-runtime`;
@@ -84,6 +84,29 @@ async function clearQuranOfflineCache() {
     if (url.hostname === 'equran.id' && /\/surat\/\d+(?:\/|$)/.test(url.pathname)) await api.delete(request);
   }));
 }
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const requestedPath = String(event.notification.data?.url || '/');
+  let targetUrl;
+  try {
+    const parsed = new URL(requestedPath, self.location.origin);
+    targetUrl = parsed.origin === self.location.origin ? parsed.href : self.location.origin + '/';
+  } catch {
+    targetUrl = self.location.origin + '/';
+  }
+  event.waitUntil((async () => {
+    const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const client of clients) {
+      if (typeof client.focus !== 'function') continue;
+      if (typeof client.navigate === 'function') {
+        try { await client.navigate(targetUrl); } catch { /* Focus the existing page if navigation is unavailable. */ }
+      }
+      return client.focus();
+    }
+    return self.clients.openWindow(targetUrl);
+  })());
+});
 
 self.addEventListener('message', (event) => {
   const message = event.data || {};

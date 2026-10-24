@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
-  ArrowRight, AudioLines, Bookmark, BookMarked, BookOpen, CalendarDays, Check, Compass, Flame, TrendingUp,
+  ArrowRight, AudioLines, BellRing, Bookmark, BookMarked, BookOpen, CalendarDays, Check, Compass, Flame, TrendingUp,
   ChevronDown, ChevronLeft, ChevronRight, Clock3, Copy, Download, HandHeart,
   Headphones, Heart, Home, Info, ListFilter, LoaderCircle, MapPin, Minus, Moon, Gauge,
   MoreHorizontal, Pause, Play, Plus, RefreshCw, Search, Settings2, ShieldCheck,
@@ -27,6 +27,7 @@ import {
   MAX_AUDIO_TRACK_BYTES, MAX_TOTAL_AUDIO_BYTES, OFFLINE_AUDIO_CACHE_NAME, OFFLINE_AUDIO_STORAGE_KEY,
   inspectOfflineAudioCache, normalizeOfflineAudioTracks, totalOfflineAudioBytes, upsertOfflineAudioTrack
 } from '@/lib/offline-audio';
+import { DEFAULT_REMINDER_DRAFT, normalizeReminderList, REMINDER_DAY_OPTIONS, REMINDER_MAX_COUNT } from '@/lib/local-reminders';
 import QiblaFinder from '@/components/QiblaFinder';
 import {
   chooseAudio, cleanArabicText, fetchAllPrayerCities, fetchDuas, fetchPrayerCity, fetchPrayerSchedule,
@@ -84,6 +85,7 @@ function mergeInitialDua(rows, initialDua) {
 }
 const TOTAL_QURAN_VERSES = 6236;
 const KHATAM_OPTIONS = [30, 60, 90];
+const REMINDER_KIND_LABELS = { tilawah: 'Tilawah', doa: 'Doa harian', both: 'Tilawah & doa' };
 const AUDIO_REPEAT_OPTIONS = [
   { value: 'off', label: 'Mati' },
   { value: '3', label: '3×' },
@@ -222,6 +224,11 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
   const [installed, setInstalled] = useState(false);
   const [toast, setToast] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [reminders, setReminders] = useState([]);
+  const [remindersLoaded, setRemindersLoaded] = useState(false);
+  const [notificationPermission, setNotificationPermission] = useState('default');
+  const [reminderEditingId, setReminderEditingId] = useState(null);
+  const [reminderDraft, setReminderDraft] = useState(() => ({ ...DEFAULT_REMINDER_DRAFT, days: [...DEFAULT_REMINDER_DRAFT.days] }));
   const backupFileInputRef = useRef(null);
 
   const [surahs, setSurahs] = useState(fallbackSurahs);
@@ -411,6 +418,9 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
     setDailyVerseGoal(savedDailyVerseGoal);
     setDailyGoalDraft(String(savedDailyVerseGoal));
     setDailyGoalLoaded(true);
+    setReminders(normalizeReminderList(readLocal('aq:reminders', [])));
+    setRemindersLoaded(true);
+    setNotificationPermission(typeof Notification === 'undefined' ? 'unsupported' : Notification.permission);
     const savedOfflineSurahs = normalizeOfflineSurahIds(readLocal('aq:offline-surahs', []));
     setOfflineSurahs(savedOfflineSurahs);
     const savedOfflineAudioTracks = normalizeOfflineAudioTracks(readLocal(OFFLINE_AUDIO_STORAGE_KEY, []));
@@ -721,6 +731,78 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
   useEffect(() => {
     if (dailyGoalLoaded) writeLocal('aq:daily-verse-target', dailyVerseGoal);
   }, [dailyVerseGoal, dailyGoalLoaded]);
+  useEffect(() => {
+    if (remindersLoaded) writeLocal('aq:reminders', reminders);
+  }, [reminders, remindersLoaded]);
+
+  // Timed reminders are checked while the app page is running. Browser timers can
+  // be throttled in background tabs, and no local-only scheduler can guarantee a
+  // notification after the browser/PWA has been fully closed.
+  useEffect(() => {
+    if (!remindersLoaded || !reminders.some((reminder) => reminder.enabled)) return undefined;
+    let disposed = false;
+    const checkDueReminders = () => {
+      if (disposed) return;
+      const now = new Date();
+      const dateKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const nowMinutes = now.getHours() * 60 + now.getMinutes();
+      const firedByReminder = readLocal('aq:reminders-last-fired', {});
+      const safeFired = firedByReminder && typeof firedByReminder === 'object' && !Array.isArray(firedByReminder) ? firedByReminder : {};
+      const due = reminders.filter((reminder) => {
+        if (!reminder.enabled || !reminder.days.includes(now.getDay()) || safeFired[reminder.id] === dateKey) return false;
+        const [hour, minute] = reminder.time.split(':').map(Number);
+        const difference = nowMinutes - (hour * 60 + minute);
+        return difference >= 0 && difference <= 4;
+      });
+      if (!due.length) return;
+      const canNotifyInBackground = typeof Notification !== 'undefined'
+        && Notification.permission === 'granted'
+        && 'serviceWorker' in navigator;
+      // If the page is hidden and system notifications are unavailable, leave the
+      // reminders pending so a quick return to the app can still show the in-app toast.
+      if (document.visibilityState !== 'visible' && !canNotifyInBackground) return;
+      const updatedFired = { ...safeFired };
+      due.forEach((reminder) => { updatedFired[reminder.id] = dateKey; });
+      const firedEntries = Object.entries(updatedFired).slice(-20);
+      writeLocal('aq:reminders-last-fired', Object.fromEntries(firedEntries));
+      if (document.visibilityState === 'visible') {
+        const summary = due.length === 1
+          ? `${due[0].title}: ${due[0].kind === 'doa' ? 'Saatnya membaca doa harian.' : due[0].kind === 'both' ? 'Saatnya tilawah dan membaca doa harian.' : 'Luangkan waktu untuk membaca beberapa ayat Al-Qur’an.'}`
+          : `${due.length} pengingat Nurani: ${due.map((item) => item.title).join(', ')}`;
+        showToast(summary);
+        return;
+      }
+      due.forEach((reminder) => {
+        const body = reminder.kind === 'doa'
+          ? 'Luangkan waktu untuk membaca doa harian.'
+          : reminder.kind === 'both'
+            ? 'Saatnya tilawah dan membaca doa harian.'
+            : 'Luangkan waktu untuk membaca beberapa ayat Al-Qur’an.';
+        const targetUrl = reminder.kind === 'doa' ? '/doa' : reminder.kind === 'both' ? '/' : '/quran';
+        navigator.serviceWorker.ready
+          .then((registration) => registration.showNotification(`Nurani · ${reminder.title}`, {
+            body,
+            icon: '/icons/icon-192.png',
+            badge: '/icons/icon-192.png',
+            tag: `nurani-reminder-${reminder.id}-${dateKey}`,
+            renotify: false,
+            data: { url: targetUrl }
+          }))
+          .catch(() => showToast(`${reminder.title}: ${body}`));
+      });
+    };
+    checkDueReminders();
+    const timer = window.setInterval(checkDueReminders, 20000);
+    const handleWake = () => checkDueReminders();
+    window.addEventListener('focus', handleWake);
+    document.addEventListener('visibilitychange', handleWake);
+    return () => {
+      disposed = true;
+      window.clearInterval(timer);
+      window.removeEventListener('focus', handleWake);
+      document.removeEventListener('visibilitychange', handleWake);
+    };
+  }, [reminders, remindersLoaded, showToast]);
   useEffect(() => {
     writeLocal('aq:offline-surahs', offlineSurahs);
   }, [offlineSurahs]);
@@ -1802,7 +1884,7 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
   };
   const exportLocalBackup = () => {
     try {
-      const backup = createLocalBackup(window.localStorage, '1.19.0');
+      const backup = createLocalBackup(window.localStorage, '1.20.0');
       const entryCount = Object.keys(backup.data).length;
       if (!entryCount) {
         showToast('Belum ada data Nurani yang bisa dicadangkan.');
@@ -1867,6 +1949,74 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
       showToast('Impor gagal. Pastikan file JSON utuh dan ruang penyimpanan masih tersedia.');
     }
   };
+  const requestReminderPermission = async () => {
+    if (typeof window === 'undefined' || typeof Notification === 'undefined' || !('serviceWorker' in navigator)) {
+      setNotificationPermission('unsupported');
+      showToast('Notifikasi sistem tidak didukung browser ini. Pengingat tetap tampil saat Nurani terbuka.');
+      return;
+    }
+    if (Notification.permission === 'denied') {
+      setNotificationPermission('denied');
+      showToast('Izin notifikasi ditolak. Ubah izin situs melalui pengaturan browser untuk mengaktifkannya.');
+      return;
+    }
+    try {
+      const permission = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
+      setNotificationPermission(permission);
+      showToast(permission === 'granted'
+        ? 'Notifikasi diizinkan. Pengingat sistem dapat muncul saat Nurani berjalan di latar belakang.'
+        : 'Izin notifikasi belum diberikan. Pengingat tetap tampil saat Nurani terbuka.');
+    } catch {
+      showToast('Izin notifikasi tidak berhasil diperiksa. Pengingat dalam aplikasi tetap tersedia.');
+    }
+  };
+
+  const saveReminder = (event) => {
+    event.preventDefault();
+    const title = String(reminderDraft.title || '').trim().slice(0, 60);
+    if (!title) { showToast('Masukkan nama pengingat terlebih dahulu.'); return; }
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(reminderDraft.time)) { showToast('Pilih waktu pengingat yang valid.'); return; }
+    const days = [...new Set(reminderDraft.days)].filter((day) => Number.isInteger(day) && day >= 0 && day <= 6).sort((a, b) => a - b);
+    if (!days.length) { showToast('Pilih minimal satu hari untuk pengingat.'); return; }
+    if (!reminderEditingId && reminders.length >= REMINDER_MAX_COUNT) { showToast(`Maksimal ${REMINDER_MAX_COUNT} jadwal pengingat. Hapus salah satu jadwal untuk menambah yang baru.`); return; }
+    const existing = reminderEditingId ? reminders.find((item) => item.id === reminderEditingId) : null;
+    const nextReminder = {
+      id: existing?.id || `rem-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      title,
+      time: reminderDraft.time,
+      kind: ['tilawah', 'doa', 'both'].includes(reminderDraft.kind) ? reminderDraft.kind : 'tilawah',
+      days,
+      enabled: reminderDraft.enabled !== false,
+      createdAt: existing?.createdAt || Date.now(),
+      updatedAt: Date.now()
+    };
+    const nextReminders = normalizeReminderList([...reminders.filter((item) => item.id !== nextReminder.id), nextReminder]);
+    if (!nextReminders.some((item) => item.id === nextReminder.id)) { showToast('Jadwal pengingat tidak valid. Periksa kembali isian.'); return; }
+    setReminders(nextReminders);
+    setReminderEditingId(null);
+    setReminderDraft({ ...DEFAULT_REMINDER_DRAFT, days: [...DEFAULT_REMINDER_DRAFT.days] });
+    showToast(existing ? 'Pengingat berhasil diperbarui.' : 'Pengingat berhasil ditambahkan.');
+  };
+
+  const editReminder = (reminder) => {
+    setReminderEditingId(reminder.id);
+    setReminderDraft({ title: reminder.title, time: reminder.time, kind: reminder.kind, days: [...reminder.days], enabled: reminder.enabled });
+  };
+
+  const deleteReminder = (reminderId) => {
+    const reminder = reminders.find((item) => item.id === reminderId);
+    if (!reminder) return;
+    if (!window.confirm(`Hapus pengingat “${reminder.title}”?`)) return;
+    setReminders((current) => current.filter((item) => item.id !== reminderId));
+    if (reminderEditingId === reminderId) {
+      setReminderEditingId(null);
+      setReminderDraft({ ...DEFAULT_REMINDER_DRAFT, days: [...DEFAULT_REMINDER_DRAFT.days] });
+    }
+    const fired = readLocal('aq:reminders-last-fired', {});
+    if (fired && typeof fired === 'object') { delete fired[reminderId]; writeLocal('aq:reminders-last-fired', fired); }
+    showToast('Pengingat dihapus.');
+  };
+
   const resetReaderSettings = () => {
     setArabicVisible(true); setLatinVisible(true); setTranslationVisible(true); setTajweedEnabled(false); setTajweedLearningMode(false); setSelectedTajweedLesson(null); setArabicSize(32); setLatinSize(18); setTranslationSize(15);
     showToast('Pengaturan bacaan dikembalikan ke awal.');
@@ -2348,7 +2498,7 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
 
       <nav className="bottom-nav" aria-label="Navigasi utama">{NAV_ITEMS.map((item) => { const Icon = item.icon; const isActive = activeTab === item.id || (activeTab === 'stats' && item.id === 'home'); return <a key={item.id} href={TAB_PATHS[item.id]} className={`nav-item ${isActive ? 'active' : ''}`} onClick={(event) => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return; event.preventDefault(); setActiveDuaSlug(null); setActiveTab(item.id); if (item.id !== 'quran') setSelectedSurah(null); }} aria-current={isActive ? 'page' : undefined}><span className="nav-icon-wrap"><Icon size={20} strokeWidth={isActive ? 2.4 : 1.8} /></span><span>{item.label}</span></a>; })}</nav>
 
-      {settingsOpen && <div className="modal-backdrop" onClick={() => setSettingsOpen(false)}><section className="modal-card settings-modal" onClick={(event) => event.stopPropagation()}><div className="modal-header"><div><p className="eyebrow">PENGATURAN</p><h2>Preferensi aplikasi</h2><p className="muted">Atur tampilan dan lindungi data tilawahmu.</p></div><button className="icon-button" onClick={() => setSettingsOpen(false)} aria-label="Tutup pengaturan"><X size={19} /></button></div><button className="settings-row" onClick={() => setTheme((value) => value === 'light' ? 'dark' : 'light')}><span className="settings-row-icon">{theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}</span><span><strong>Tampilan</strong><small>{theme === 'light' ? 'Mode terang' : 'Mode gelap'}</small></span><ChevronRight size={17} /></button><button className="settings-row" onClick={installApp}><span className="settings-row-icon"><Download size={18} /></span><span><strong>Pasang aplikasi</strong><small>Tambahkan Nurani ke layar utama</small></span><ChevronRight size={17} /></button><section className="backup-section"><div className="backup-section-heading"><span className="settings-row-icon"><ShieldCheck size={18} /></span><div><strong>Cadangkan & pulihkan data</strong><small>Bookmark, progres, posisi bacaan, target harian, favorit, pengaturan, dan catatan tadabbur.</small></div></div><div className="backup-actions"><button type="button" className="button button-secondary" onClick={exportLocalBackup}><Download size={16} /> Ekspor cadangan</button><button type="button" className="button button-gold" onClick={() => backupFileInputRef.current?.click()}><Upload size={16} /> Impor cadangan</button><input ref={backupFileInputRef} className="backup-file-input" type="file" accept=".json,application/json" onChange={importLocalBackup} aria-label="Pilih file cadangan Nurani" /></div><p className="backup-privacy-note">Cadangan dibuat sebagai file JSON yang tersimpan di perangkat. File ini dapat berisi catatan pribadi—simpan di tempat yang aman dan jangan membagikannya secara publik. Impor hanya memproses key Nurani yang dikenal (maks. 5 MB).</p></section><section className="offline-manager-section"><button type="button" className="offline-manager-toggle" aria-expanded={offlineManagerExpanded} onClick={() => { const next = !offlineManagerExpanded; setOfflineManagerExpanded(next); if (next) void refreshOfflineStorage(); }}><span className="settings-row-icon">{online ? <Download size={18} /> : <WifiOff size={18} />}</span><span className="offline-manager-toggle-copy"><strong>Kelola konten offline</strong><small>{offlineSurahs.length} surah ditandai · {formatStorageBytes(offlineStorageStats.pinnedBytes)} data ayat</small></span>{offlineManagerExpanded ? <ChevronDown size={17} /> : <ChevronRight size={17} />}</button>{offlineManagerExpanded && <div className="offline-manager-body"><div className="offline-stats-grid"><div className="offline-stat"><span>Cache ayat lokal</span><strong>{offlineStorageStats.cachedSurahIds.length} surah</strong><small>{formatStorageBytes(offlineStorageStats.cachedVerseBytes)}</small></div><div className="offline-stat"><span>Penyimpanan origin</span><strong>{offlineStorageStats.originUsage === null ? 'Tidak tersedia' : formatStorageBytes(offlineStorageStats.originUsage)}</strong><small>{offlineStorageStats.originQuota === null ? 'Estimasi browser tidak didukung' : `Dari ${formatStorageBytes(offlineStorageStats.originQuota)} yang diizinkan`}</small></div></div>{offlineStorageStats.missingPinnedSurahIds.length > 0 && <p className="offline-manager-warning"><WifiOff size={14} /> {offlineStorageStats.missingPinnedSurahIds.length} surah ditandai offline tetapi data ayatnya tidak ditemukan. Simpan ulang surah saat online.</p>}{offlineSurahs.length > 0 ? <div className="offline-manager-list">{offlineSurahs.map((id) => { const surah = surahs.find((item) => Number(item.nomor) === Number(id)) || fallbackSurahs[Number(id) - 1]; const rows = offlineStorageStats.cachedVerseCounts[Number(id)] || 0; return <div className="offline-manager-item" key={id}><span className="offline-manager-book"><BookOpen size={16} /></span><div className="offline-manager-item-copy"><strong>{surah?.namaLatin || `Surah ${id}`}</strong><small>{rows ? `${rows} ayat tersimpan · ${formatStorageBytes(offlineStorageStats.cachedSurahBytes[Number(id)] || 0)}` : 'Data ayat perlu disimpan ulang'}</small></div><button type="button" className="icon-button small" aria-label={`Buka ${surah?.namaLatin || `Surah ${id}`}`} title="Buka surah" onClick={() => { setSettingsOpen(false); void openSurah(surah, 1); }}><ArrowRight size={15} /></button><button type="button" className="icon-button small offline-remove-button" aria-label={`Hapus ${surah?.namaLatin || `Surah ${id}`} dari data offline`} title="Hapus data offline" onClick={() => removeOfflineSurah(id)}><Trash2 size={14} /></button></div>; })}</div> : <div className="offline-manager-empty"><WifiOff size={18} /><span>Belum ada surah yang ditandai untuk akses offline. Buka surah saat terhubung internet lalu tekan <strong>Simpan offline</strong>.</span></div>}<button type="button" className="button button-danger-ghost offline-clear-button" onClick={clearOfflineQuranData} disabled={offlineStorageStats.cachedSurahIds.length === 0 && offlineSurahs.length === 0}><Trash2 size={14} /> Hapus semua cache ayat</button><p className="offline-manager-note">Estimasi penyimpanan berasal dari browser dan dapat mencakup cache serta data Nurani lain di origin yang sama. Catatan, bookmark, progres, dan file cadangan tidak ikut dihapus saat cache ayat dibersihkan.</p><button type="button" className="text-link offline-refresh-button" onClick={() => void refreshOfflineStorage()}><RefreshCw size={13} /> Perbarui informasi penyimpanan</button><section className="offline-audio-manager"><div className="offline-audio-manager-heading"><span className="settings-row-icon"><Headphones size={18} /></span><div><strong>Audio murottal offline</strong><small>{offlineAudioTracks.length} file · {new Set(offlineAudioTracks.map((track) => track.reciterId || track.reciter)).size} qari · {formatStorageBytes(offlineAudioStats.cachedBytes)} tersimpan</small></div></div><label className="offline-audio-filter"><span>Filter qari</span><select value={offlineAudioFilter} onChange={(event) => setOfflineAudioFilter(event.target.value)} aria-label="Filter audio offline berdasarkan qari"><option value="all">Semua qari</option>{QARIS.map((qari, index) => <option key={QARI_IDS[index]} value={QARI_IDS[index]}>{qari}</option>)}</select></label>{offlineAudioStats.missingSrcs.length > 0 && <p className="offline-manager-warning"><WifiOff size={14} /> {offlineAudioStats.missingSrcs.length} audio tercatat tetapi file cache tidak ditemukan. Hubungkan internet dan unduh ulang.</p>}{offlineAudioTracks.length ? (offlineAudioTracks.filter((track) => offlineAudioFilter === 'all' || track.reciterId === offlineAudioFilter).length ? <div className="offline-manager-list offline-audio-list">{offlineAudioTracks.filter((track) => offlineAudioFilter === 'all' || track.reciterId === offlineAudioFilter).map((track) => { const available = offlineAudioStats.cachedSrcs.includes(track.src); return <div className="offline-manager-item" key={`${track.surahId}:${track.reciterId || track.src}:${track.type || 'full'}:${track.verseNumber || 0}`}><span className="offline-manager-book"><Headphones size={16} /></span><div className="offline-manager-item-copy"><strong>{track.title}</strong><small>{track.reciter} · {available ? formatStorageBytes(track.bytes) : 'File cache tidak ditemukan'}</small></div><button type="button" className="icon-button small offline-remove-button" aria-label={`Hapus audio ${track.title}, ${track.reciter}`} title="Hapus audio offline" onClick={() => void removeOfflineAudioTrack(track)}><Trash2 size={14} /></button></div>; })}</div> : <div className="offline-manager-empty"><Headphones size={18} /><span>Belum ada audio untuk qari ini. Pilih qari pada halaman surah lalu tekan <strong>Unduh audio</strong>.</span></div>) : <div className="offline-manager-empty"><Headphones size={18} /><span>Belum ada audio yang diunduh. Buka surah, pilih qari, lalu tekan <strong>Unduh audio</strong>.</span></div>}{audioDownloadProgress && <p className="offline-audio-downloading"><LoaderCircle size={14} className="spin" /> Mengunduh {audioDownloadProgress.title} · {audioDownloadProgress.reciter}: {audioDownloadProgress.total ? `${Math.min(100, Math.round(audioDownloadProgress.loaded / audioDownloadProgress.total * 100))}%` : formatStorageBytes(audioDownloadProgress.loaded)}</p>}{offlineAudioFilter !== 'all' && offlineAudioTracks.some((track) => track.reciterId === offlineAudioFilter) && <button className="button button-danger-ghost offline-clear-button" onClick={() => void clearOfflineAudioForReciter(offlineAudioFilter)}><Trash2 size={14} /> Hapus semua audio qari ini</button>}<button className="button button-danger-ghost offline-clear-button" onClick={() => void clearOfflineAudioTracks()} disabled={!offlineAudioTracks.length && !offlineAudioStats.cachedSrcs.length}><Trash2 size={14} /> Hapus semua audio offline</button><p className="offline-manager-note">EQuran menyediakan MP3 berkualitas tinggi tanpa pilihan bitrate resmi. Untuk lebih hemat, gunakan ikon unduh pada kartu ayat agar hanya ayat yang diperlukan tersimpan; Anda juga dapat mengunduh satu surah penuh. Maksimal 80 MB per file dan 200 MB total.</p><button className="text-link offline-refresh-button" onClick={() => void refreshOfflineAudioStats()}><RefreshCw size={13} /> Periksa ulang cache audio</button></section></div>}</section><div className="settings-note"><ShieldCheck size={16} /><span>Data utama tetap disimpan lokal di perangkat ini. Katalog surah dan doa yang dapat diambil ulang tidak dimasukkan ke file cadangan.</span></div></section></div>}
+      {settingsOpen && <div className="modal-backdrop" onClick={() => setSettingsOpen(false)}><section className="modal-card settings-modal" onClick={(event) => event.stopPropagation()}><div className="modal-header"><div><p className="eyebrow">PENGATURAN</p><h2>Preferensi aplikasi</h2><p className="muted">Atur tampilan dan lindungi data tilawahmu.</p></div><button className="icon-button" onClick={() => setSettingsOpen(false)} aria-label="Tutup pengaturan"><X size={19} /></button></div><button className="settings-row" onClick={() => setTheme((value) => value === 'light' ? 'dark' : 'light')}><span className="settings-row-icon">{theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}</span><span><strong>Tampilan</strong><small>{theme === 'light' ? 'Mode terang' : 'Mode gelap'}</small></span><ChevronRight size={17} /></button><button className="settings-row" onClick={installApp}><span className="settings-row-icon"><Download size={18} /></span><span><strong>Pasang aplikasi</strong><small>Tambahkan Nurani ke layar utama</small></span><ChevronRight size={17} /></button><section className="reminder-settings-section"><div className="reminder-section-heading"><span className="settings-row-icon"><BellRing size={18} /></span><div><strong>Pengingat tilawah dan doa</strong><small>Atur sampai {REMINDER_MAX_COUNT} jadwal sesuai waktu dan hari pilihanmu.</small></div></div><div className="reminder-permission-row"><div className="reminder-permission-copy"><strong>{notificationPermission === 'granted' ? 'Notifikasi sistem diizinkan' : notificationPermission === 'denied' ? 'Notifikasi diblokir browser' : notificationPermission === 'unsupported' ? 'Notifikasi sistem tidak tersedia' : 'Notifikasi sistem belum diaktifkan'}</strong><small>{notificationPermission === 'denied' ? 'Ubah izin melalui pengaturan situs di browser.' : notificationPermission === 'granted' ? 'Pengingat dapat tampil sebagai notifikasi saat halaman berjalan di latar belakang.' : 'Izin hanya diminta setelah tombol di bawah ditekan.'}</small></div><button type="button" className="button button-secondary reminder-permission-button" onClick={requestReminderPermission} disabled={['granted', 'denied', 'unsupported'].includes(notificationPermission)}>{notificationPermission === 'granted' ? 'Diaktifkan' : notificationPermission === 'denied' ? 'Izin diblokir' : notificationPermission === 'unsupported' ? 'Tidak didukung' : 'Aktifkan notifikasi'}</button></div><form className="reminder-form" onSubmit={saveReminder}><label className="reminder-field-label">Nama pengingat<input type="text" maxLength={60} value={reminderDraft.title} onChange={(event) => setReminderDraft((current) => ({ ...current, title: event.target.value }))} placeholder="Contoh: Tilawah setelah Subuh" required /></label><div className="reminder-form-grid"><label className="reminder-field-label">Waktu<input type="time" value={reminderDraft.time} onChange={(event) => setReminderDraft((current) => ({ ...current, time: event.target.value }))} required /></label><label className="reminder-field-label">Jenis pengingat<select value={reminderDraft.kind} onChange={(event) => setReminderDraft((current) => ({ ...current, kind: event.target.value }))}><option value="tilawah">Tilawah</option><option value="doa">Doa harian</option><option value="both">Tilawah & doa</option></select></label></div><div className="reminder-days-field"><span className="reminder-field-title">Ulangi pada</span><div className="reminder-days-options" role="group" aria-label="Pilih hari pengingat">{REMINDER_DAY_OPTIONS.map((day) => <label key={day.value} className={reminderDraft.days.includes(day.value) ? 'is-selected' : ''}><input type="checkbox" checked={reminderDraft.days.includes(day.value)} onChange={(event) => setReminderDraft((current) => ({ ...current, days: event.target.checked ? [...new Set([...current.days, day.value])].sort((a, b) => a - b) : current.days.filter((value) => value !== day.value) }))} /><span>{day.short}</span></label>)}</div></div><label className="reminder-enabled-draft"><input type="checkbox" checked={reminderDraft.enabled !== false} onChange={(event) => setReminderDraft((current) => ({ ...current, enabled: event.target.checked }))} /><span>Aktifkan jadwal ini</span></label><div className="reminder-form-actions"><button type="submit" className="button button-gold"><Check size={15} /> {reminderEditingId ? 'Simpan perubahan' : 'Tambah pengingat'}</button>{reminderEditingId && <button type="button" className="button button-secondary" onClick={() => { setReminderEditingId(null); setReminderDraft({ ...DEFAULT_REMINDER_DRAFT, days: [...DEFAULT_REMINDER_DRAFT.days] }); }}>Batal edit</button>}</div></form><div className="reminder-saved-list-heading"><strong>Jadwal tersimpan</strong><span>{reminders.length}/{REMINDER_MAX_COUNT}</span></div>{reminders.length ? <div className="reminder-saved-list">{reminders.map((reminder) => <article className={`reminder-item${reminder.enabled ? '' : ' is-disabled'}`} key={reminder.id}><div className="reminder-item-time">{reminder.time}</div><div className="reminder-item-copy"><strong>{reminder.title}</strong><small>{REMINDER_KIND_LABELS[reminder.kind]} · {reminder.days.map((day) => REMINDER_DAY_OPTIONS.find((option) => option.value === day)?.short).filter(Boolean).join(', ')}</small><label className="reminder-item-toggle"><input type="checkbox" checked={reminder.enabled} onChange={(event) => setReminders((current) => current.map((item) => item.id === reminder.id ? { ...item, enabled: event.target.checked, updatedAt: Date.now() } : item))} /><span>{reminder.enabled ? 'Aktif' : 'Nonaktif'}</span></label></div><div className="reminder-item-actions"><button type="button" className="icon-button small" aria-label={`Edit pengingat ${reminder.title}`} title="Edit pengingat" onClick={() => editReminder(reminder)}><PencilLine size={14} /></button><button type="button" className="icon-button small offline-remove-button" aria-label={`Hapus pengingat ${reminder.title}`} title="Hapus pengingat" onClick={() => deleteReminder(reminder.id)}><Trash2 size={14} /></button></div></article>)}</div> : <div className="reminder-empty-state"><BellRing size={18} /><span>Belum ada pengingat. Tambahkan jadwal untuk membantu menjaga kebiasaan tilawah atau membaca doa.</span></div>}<p className="reminder-limitation-note">Pengingat diperiksa saat halaman atau PWA Nurani berjalan. Browser dapat membatasi timer di latar belakang; jika aplikasi benar-benar ditutup, jadwal ini tidak dijamin berjalan. Notifikasi latar belakang yang andal memerlukan layanan push di server.</p></section><section className="backup-section"><div className="backup-section-heading"><span className="settings-row-icon"><ShieldCheck size={18} /></span><div><strong>Cadangkan & pulihkan data</strong><small>Bookmark, progres, posisi bacaan, target harian, pengingat, favorit, pengaturan, dan catatan tadabbur.</small></div></div><div className="backup-actions"><button type="button" className="button button-secondary" onClick={exportLocalBackup}><Download size={16} /> Ekspor cadangan</button><button type="button" className="button button-gold" onClick={() => backupFileInputRef.current?.click()}><Upload size={16} /> Impor cadangan</button><input ref={backupFileInputRef} className="backup-file-input" type="file" accept=".json,application/json" onChange={importLocalBackup} aria-label="Pilih file cadangan Nurani" /></div><p className="backup-privacy-note">Cadangan dibuat sebagai file JSON yang tersimpan di perangkat. File ini dapat berisi catatan pribadi—simpan di tempat yang aman dan jangan membagikannya secara publik. Impor hanya memproses key Nurani yang dikenal (maks. 5 MB).</p></section><section className="offline-manager-section"><button type="button" className="offline-manager-toggle" aria-expanded={offlineManagerExpanded} onClick={() => { const next = !offlineManagerExpanded; setOfflineManagerExpanded(next); if (next) void refreshOfflineStorage(); }}><span className="settings-row-icon">{online ? <Download size={18} /> : <WifiOff size={18} />}</span><span className="offline-manager-toggle-copy"><strong>Kelola konten offline</strong><small>{offlineSurahs.length} surah ditandai · {formatStorageBytes(offlineStorageStats.pinnedBytes)} data ayat</small></span>{offlineManagerExpanded ? <ChevronDown size={17} /> : <ChevronRight size={17} />}</button>{offlineManagerExpanded && <div className="offline-manager-body"><div className="offline-stats-grid"><div className="offline-stat"><span>Cache ayat lokal</span><strong>{offlineStorageStats.cachedSurahIds.length} surah</strong><small>{formatStorageBytes(offlineStorageStats.cachedVerseBytes)}</small></div><div className="offline-stat"><span>Penyimpanan origin</span><strong>{offlineStorageStats.originUsage === null ? 'Tidak tersedia' : formatStorageBytes(offlineStorageStats.originUsage)}</strong><small>{offlineStorageStats.originQuota === null ? 'Estimasi browser tidak didukung' : `Dari ${formatStorageBytes(offlineStorageStats.originQuota)} yang diizinkan`}</small></div></div>{offlineStorageStats.missingPinnedSurahIds.length > 0 && <p className="offline-manager-warning"><WifiOff size={14} /> {offlineStorageStats.missingPinnedSurahIds.length} surah ditandai offline tetapi data ayatnya tidak ditemukan. Simpan ulang surah saat online.</p>}{offlineSurahs.length > 0 ? <div className="offline-manager-list">{offlineSurahs.map((id) => { const surah = surahs.find((item) => Number(item.nomor) === Number(id)) || fallbackSurahs[Number(id) - 1]; const rows = offlineStorageStats.cachedVerseCounts[Number(id)] || 0; return <div className="offline-manager-item" key={id}><span className="offline-manager-book"><BookOpen size={16} /></span><div className="offline-manager-item-copy"><strong>{surah?.namaLatin || `Surah ${id}`}</strong><small>{rows ? `${rows} ayat tersimpan · ${formatStorageBytes(offlineStorageStats.cachedSurahBytes[Number(id)] || 0)}` : 'Data ayat perlu disimpan ulang'}</small></div><button type="button" className="icon-button small" aria-label={`Buka ${surah?.namaLatin || `Surah ${id}`}`} title="Buka surah" onClick={() => { setSettingsOpen(false); void openSurah(surah, 1); }}><ArrowRight size={15} /></button><button type="button" className="icon-button small offline-remove-button" aria-label={`Hapus ${surah?.namaLatin || `Surah ${id}`} dari data offline`} title="Hapus data offline" onClick={() => removeOfflineSurah(id)}><Trash2 size={14} /></button></div>; })}</div> : <div className="offline-manager-empty"><WifiOff size={18} /><span>Belum ada surah yang ditandai untuk akses offline. Buka surah saat terhubung internet lalu tekan <strong>Simpan offline</strong>.</span></div>}<button type="button" className="button button-danger-ghost offline-clear-button" onClick={clearOfflineQuranData} disabled={offlineStorageStats.cachedSurahIds.length === 0 && offlineSurahs.length === 0}><Trash2 size={14} /> Hapus semua cache ayat</button><p className="offline-manager-note">Estimasi penyimpanan berasal dari browser dan dapat mencakup cache serta data Nurani lain di origin yang sama. Catatan, bookmark, progres, dan file cadangan tidak ikut dihapus saat cache ayat dibersihkan.</p><button type="button" className="text-link offline-refresh-button" onClick={() => void refreshOfflineStorage()}><RefreshCw size={13} /> Perbarui informasi penyimpanan</button><section className="offline-audio-manager"><div className="offline-audio-manager-heading"><span className="settings-row-icon"><Headphones size={18} /></span><div><strong>Audio murottal offline</strong><small>{offlineAudioTracks.length} file · {new Set(offlineAudioTracks.map((track) => track.reciterId || track.reciter)).size} qari · {formatStorageBytes(offlineAudioStats.cachedBytes)} tersimpan</small></div></div><label className="offline-audio-filter"><span>Filter qari</span><select value={offlineAudioFilter} onChange={(event) => setOfflineAudioFilter(event.target.value)} aria-label="Filter audio offline berdasarkan qari"><option value="all">Semua qari</option>{QARIS.map((qari, index) => <option key={QARI_IDS[index]} value={QARI_IDS[index]}>{qari}</option>)}</select></label>{offlineAudioStats.missingSrcs.length > 0 && <p className="offline-manager-warning"><WifiOff size={14} /> {offlineAudioStats.missingSrcs.length} audio tercatat tetapi file cache tidak ditemukan. Hubungkan internet dan unduh ulang.</p>}{offlineAudioTracks.length ? (offlineAudioTracks.filter((track) => offlineAudioFilter === 'all' || track.reciterId === offlineAudioFilter).length ? <div className="offline-manager-list offline-audio-list">{offlineAudioTracks.filter((track) => offlineAudioFilter === 'all' || track.reciterId === offlineAudioFilter).map((track) => { const available = offlineAudioStats.cachedSrcs.includes(track.src); return <div className="offline-manager-item" key={`${track.surahId}:${track.reciterId || track.src}:${track.type || 'full'}:${track.verseNumber || 0}`}><span className="offline-manager-book"><Headphones size={16} /></span><div className="offline-manager-item-copy"><strong>{track.title}</strong><small>{track.reciter} · {available ? formatStorageBytes(track.bytes) : 'File cache tidak ditemukan'}</small></div><button type="button" className="icon-button small offline-remove-button" aria-label={`Hapus audio ${track.title}, ${track.reciter}`} title="Hapus audio offline" onClick={() => void removeOfflineAudioTrack(track)}><Trash2 size={14} /></button></div>; })}</div> : <div className="offline-manager-empty"><Headphones size={18} /><span>Belum ada audio untuk qari ini. Pilih qari pada halaman surah lalu tekan <strong>Unduh audio</strong>.</span></div>) : <div className="offline-manager-empty"><Headphones size={18} /><span>Belum ada audio yang diunduh. Buka surah, pilih qari, lalu tekan <strong>Unduh audio</strong>.</span></div>}{audioDownloadProgress && <p className="offline-audio-downloading"><LoaderCircle size={14} className="spin" /> Mengunduh {audioDownloadProgress.title} · {audioDownloadProgress.reciter}: {audioDownloadProgress.total ? `${Math.min(100, Math.round(audioDownloadProgress.loaded / audioDownloadProgress.total * 100))}%` : formatStorageBytes(audioDownloadProgress.loaded)}</p>}{offlineAudioFilter !== 'all' && offlineAudioTracks.some((track) => track.reciterId === offlineAudioFilter) && <button className="button button-danger-ghost offline-clear-button" onClick={() => void clearOfflineAudioForReciter(offlineAudioFilter)}><Trash2 size={14} /> Hapus semua audio qari ini</button>}<button className="button button-danger-ghost offline-clear-button" onClick={() => void clearOfflineAudioTracks()} disabled={!offlineAudioTracks.length && !offlineAudioStats.cachedSrcs.length}><Trash2 size={14} /> Hapus semua audio offline</button><p className="offline-manager-note">EQuran menyediakan MP3 berkualitas tinggi tanpa pilihan bitrate resmi. Untuk lebih hemat, gunakan ikon unduh pada kartu ayat agar hanya ayat yang diperlukan tersimpan; Anda juga dapat mengunduh satu surah penuh. Maksimal 80 MB per file dan 200 MB total.</p><button className="text-link offline-refresh-button" onClick={() => void refreshOfflineAudioStats()}><RefreshCw size={13} /> Periksa ulang cache audio</button></section></div>}</section><div className="settings-note"><ShieldCheck size={16} /><span>Data utama tetap disimpan lokal di perangkat ini. Katalog surah dan doa yang dapat diambil ulang tidak dimasukkan ke file cadangan.</span></div></section></div>}
 
       {verseNotesModalOpen && <div className="modal-backdrop" onClick={() => setVerseNotesModalOpen(false)}><section className="modal-card verse-notes-modal" onClick={(event) => event.stopPropagation()}><div className="modal-header"><div><p className="eyebrow">CATATAN PRIBADI</p><h2>Semua catatan tadabbur</h2><p className="muted">{allVerseNotes.length} catatan tersimpan di perangkat ini.</p></div><button className="icon-button" onClick={() => setVerseNotesModalOpen(false)} aria-label="Tutup catatan"><X size={19} /></button></div><div className="verse-notes-modal-list">{allVerseNotes.map((note) => <div className="verse-notes-modal-item" key={`${note.surahId}:${note.verseNumber}`}><div className="verse-notes-modal-item-copy"><strong>{note.surahName} · Ayat {note.verseNumber}</strong><p>{note.text}</p><small>{new Date(note.updatedAt || Date.now()).toLocaleString('id-ID')}</small></div><div className="verse-notes-modal-item-actions"><button type="button" className="icon-button small" aria-label={`Buka ${note.surahName} ayat ${note.verseNumber}`} onClick={() => openVerseFromNote(note)}><ArrowRight size={16} /></button><button type="button" className="icon-button small note-delete-action" aria-label={`Hapus catatan ${note.surahName} ayat ${note.verseNumber}`} onClick={() => deleteVerseNote(`${note.surahId}:${note.verseNumber}`)}><Trash2 size={15} /></button></div></div>)}</div><div className="modal-footnote"><ShieldCheck size={15} /><span>Catatan hanya disimpan pada browser/perangkat ini. Catatan tidak diunggah ke server dan tidak tersinkron otomatis ke perangkat lain.</span></div></section></div>}
 

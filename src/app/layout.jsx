@@ -104,6 +104,7 @@ const structuredData = {
     'Jadwal shalat wilayah Indonesia',
     'Doa harian dan Asmaul Husna',
     'Progres tilawah dan target khatam',
+    'Pengingat tilawah dan doa harian',
     'Dukungan Progressive Web App',
     'Arah kiblat dengan lokasi dan kompas perangkat',
     'Warna tajwid berdasarkan anotasi edisi quran-tajweed',
