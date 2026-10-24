@@ -15,7 +15,7 @@
   <img alt="Tailwind CSS" src="https://img.shields.io/badge/Tailwind_CSS-v3-06B6D4?logo=tailwindcss&logoColor=white" />
   <img alt="PWA" src="https://img.shields.io/badge/PWA-Installable-5A0FC8?logo=pwa&logoColor=white" />
   <img alt="Bahasa Indonesia" src="https://img.shields.io/badge/Bahasa-Indonesia-059669" />
-  <img alt="Versi aplikasi 1.8.0" src="https://img.shields.io/badge/Versi-1.8.0-059669" />
+  <img alt="Versi aplikasi 1.9.0" src="https://img.shields.io/badge/Versi-1.9.0-059669" />
 </p>
 
 <p align="center">
@@ -46,7 +46,7 @@ Setiap doa harian juga memiliki URL individual, misalnya `/doa/1-doa-sebelum-mak
 
 Next.js membangun 114 route dari metadata surah lokal. Setiap route menyediakan title, deskripsi, canonical URL, Open Graph, dan Twitter Card khusus. Daftar surah menampilkan anchor HTML yang bisa diikuti crawler, sedangkan klik normal tetap membuka pembaca di dalam aplikasi tanpa reload.
 
-## Fitur terbaru — v1.8.0
+## Fitur terbaru — v1.9.0
 
 - URL detail individual untuk doa harian dengan pola `/doa/{id}-{slug-judul}`, contoh `/doa/1-doa-sebelum-makan`.
 - Setiap kartu doa memiliki aksi **Bagikan doa** dan **Buka doa**.
@@ -56,7 +56,9 @@ Next.js membangun 114 route dari metadata surah lokal. Setiap route menyediakan 
 - Cache service worker versi sebelumnya telah menyertakan URL doa cadangan di app shell.
 - Fitur **Catatan Tadabbur per Ayat**: tambah, edit, hapus, dan tinjau catatan pribadi pada ayat; tiga catatan terbaru tampil di beranda dan seluruh catatan bisa dibuka dalam satu daftar.
 - Catatan dibatasi 2.000 karakter per ayat dan 500 entri, disimpan di `localStorage`, serta tidak ikut terhapus saat progres khatam direset.
-- Service worker diperbarui menjadi `nurani-pwa-v16`.
+- Fitur **Cadangkan & Pulihkan Data** untuk mengekspor dan mengimpor bookmark, catatan tadabbur, progres tilawah, posisi bacaan terakhir, target khatam, favorit Asmaul Husna, serta preferensi pembaca dalam file JSON tervalidasi.
+- File cadangan dibatasi 5 MB, hanya menerima key data Nurani yang diizinkan, dan tidak menyertakan cache katalog surah/doa maupun data surah offline yang khusus untuk perangkat. Kategori yang ada pada file menggantikan kategori sejenis; kategori yang tidak ada dibiarkan tetap.
+- Service worker diperbarui menjadi `nurani-pwa-v17`.
 
 Catatan tadabbur bersifat lokal per browser/perangkat; belum ada akun atau sinkronisasi cloud. Sebelum deployment, jalankan `npm run lint` dan `npm run build`. Detail doa dari API dicache di server selama 24 jam; jika API tidak tersedia, lima doa cadangan yang dibundel tetap bisa dibuka.
 
@@ -69,6 +71,7 @@ Catatan tadabbur bersifat lokal per browser/perangkat; belum ada akun atau sinkr
 | 🧠 **Mode hafalan** | Sembunyikan atau tampilkan teks Arab, transliterasi, dan terjemahan secara terpisah. |
 | 🔖 **Bookmark & lanjut baca** | Simpan penanda ayat, posisi terakhir, dan preferensi membaca pada perangkat. |
 | 📝 **Catatan tadabbur** | Tulis, edit, hapus, dan tinjau catatan pribadi per ayat; catatan tersimpan lokal dan dapat dibuka lagi dari beranda. |
+| 💾 **Cadangan data** | Ekspor dan impor bookmark, catatan, progres bacaan, target khatam, favorit, dan preferensi melalui file JSON lokal. |
 | 🎯 **Progres tilawah & target khatam** | Hitung ayat yang ditandai saat dibaca, pantau progres keseluruhan dan target harian, serta pilih target 30, 60, atau 90 hari. |
 | 🔁 **Murajaah audio** | Ulangi audio per ayat 3×, 5×, 10×, atau tanpa batas; pilihan disimpan secara lokal. |
 | 📥 **Surah offline** | Tandai surah yang telah dimuat untuk akses offline dan filter daftar surah yang ditandai. |

@@ -7,7 +7,7 @@ import {
   ChevronDown, ChevronLeft, ChevronRight, Clock3, Copy, Download, HandHeart,
   Headphones, Heart, Home, Info, ListFilter, LoaderCircle, MapPin, Minus, Moon,
   MoreHorizontal, Pause, Play, Plus, RefreshCw, Search, Settings2, ShieldCheck,
-  Share2, SlidersHorizontal, Sparkles, Sun, Wifi, WifiOff, X, Repeat, Target, StickyNote, PencilLine, Trash2
+  Share2, SlidersHorizontal, Sparkles, Sun, Wifi, WifiOff, X, Repeat, Target, StickyNote, PencilLine, Trash2, Upload
 } from 'lucide-react';
 import { asmaulHusna, enforceBeforeMealDua, fallbackDuas, fallbackSurahs, MIN_DUA_CATALOG_SIZE } from '@/lib/data';
 import { extractDuaRows, isUsableDua, normalizeDua } from '@/lib/duas';
@@ -15,6 +15,10 @@ import { getDuaPath, getDuaSlug, getDuaSlugFromPathname } from '@/lib/dua-routes
 import { PATH_TABS, SECTION_SEO_BY_TAB, TAB_PATHS, VALID_TABS } from '@/lib/section-routes';
 import { getSurahNumberFromPathname, getSurahPath, getVerseNumberFromPathname, getVersePath } from '@/lib/surah-routes';
 import { siteName, siteUrl } from '@/lib/site-config';
+import {
+  LOCAL_BACKUP_LABELS, LOCAL_BACKUP_MAX_BYTES,
+  createLocalBackup, describeLocalBackupValue, validateLocalBackupPayload
+} from '@/lib/local-backup';
 import {
   chooseAudio, cleanArabicText, fetchAllPrayerCities, fetchDuas, fetchPrayerCity, fetchPrayerSchedule,
   fetchQuran, firstArray, normalizeSurah, normalizeVerse, unwrapPayload
@@ -175,6 +179,7 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
   const [installed, setInstalled] = useState(false);
   const [toast, setToast] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const backupFileInputRef = useRef(null);
 
   const [surahs, setSurahs] = useState(fallbackSurahs);
   const [surahLoading, setSurahLoading] = useState(true);
@@ -975,6 +980,73 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
     } else if (installed) showToast('Aplikasi sudah terpasang di perangkat.');
     else showToast('Gunakan menu browser “Instal aplikasi” atau “Tambahkan ke layar utama”.');
   };
+  const exportLocalBackup = () => {
+    try {
+      const backup = createLocalBackup(window.localStorage, '1.9.0');
+      const entryCount = Object.keys(backup.data).length;
+      if (!entryCount) {
+        showToast('Belum ada data Nurani yang bisa dicadangkan.');
+        return;
+      }
+      const json = JSON.stringify(backup, null, 2);
+      const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
+      const objectUrl = window.URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.download = `nurani-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      anchor.style.display = 'none';
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => window.URL.revokeObjectURL(objectUrl), 1500);
+      showToast(`Cadangan Nurani berhasil dibuat (${entryCount} kategori data).`);
+    } catch {
+      showToast('Cadangan gagal dibuat. Pastikan browser mengizinkan akses penyimpanan dan unduhan.');
+    }
+  };
+  const importLocalBackup = async (event) => {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+    if (file.size > LOCAL_BACKUP_MAX_BYTES) {
+      showToast('Ukuran file cadangan terlalu besar. Batas maksimal 5 MB.');
+      return;
+    }
+    try {
+      const parsed = JSON.parse(await file.text());
+      const result = validateLocalBackupPayload(parsed);
+      if (!result.valid) {
+        showToast(result.error || 'File cadangan tidak valid.');
+        return;
+      }
+      const entries = Object.entries(result.data);
+      const preview = entries.map(([key, value]) => `• ${LOCAL_BACKUP_LABELS[key]}: ${describeLocalBackupValue(key, value)}`).join('\n');
+      const warning = result.rejectedEntries ? `\n\n${result.rejectedEntries} data yang tidak dikenal atau tidak valid akan dilewati.` : '';
+      const confirmed = window.confirm(
+        `Cadangan Nurani berhasil divalidasi.\nVersi sumber: ${result.appVersion}\nTanggal: ${result.exportedAt || 'tidak tercatat'}\n\nData yang akan dipulihkan:\n${preview}${warning}\n\nKategori yang ada di file akan menggantikan kategori yang sama di perangkat ini. Kategori yang tidak terdapat dalam file tidak diubah. Lanjutkan?`
+      );
+      if (!confirmed) return;
+
+      const priorValues = new Map(entries.map(([key]) => [key, window.localStorage.getItem(key)]));
+      try {
+        entries.forEach(([key, value]) => window.localStorage.setItem(key, JSON.stringify(value)));
+      } catch (storageError) {
+        priorValues.forEach((_, key) => {
+          try { window.localStorage.removeItem(key); } catch { /* Best-effort rollback if storage is unavailable. */ }
+        });
+        priorValues.forEach((rawValue, key) => {
+          if (rawValue === null) return;
+          try { window.localStorage.setItem(key, rawValue); } catch { /* Best-effort rollback if storage is unavailable. */ }
+        });
+        throw storageError;
+      }
+      showToast('Data berhasil dipulihkan. Nurani akan dimuat ulang.');
+      window.setTimeout(() => window.location.reload(), 700);
+    } catch {
+      showToast('Impor gagal. Pastikan file JSON utuh dan ruang penyimpanan masih tersedia.');
+    }
+  };
   const resetReaderSettings = () => {
     setArabicVisible(true); setLatinVisible(true); setTranslationVisible(true); setArabicSize(32); setLatinSize(18); setTranslationSize(15);
     showToast('Pengaturan bacaan dikembalikan ke awal.');
@@ -1247,7 +1319,7 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
 
       <nav className="bottom-nav" aria-label="Navigasi utama">{NAV_ITEMS.map((item) => { const Icon = item.icon; const isActive = activeTab === item.id; return <a key={item.id} href={TAB_PATHS[item.id]} className={`nav-item ${isActive ? 'active' : ''}`} onClick={(event) => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return; event.preventDefault(); setActiveDuaSlug(null); setActiveTab(item.id); if (item.id !== 'quran') setSelectedSurah(null); }} aria-current={isActive ? 'page' : undefined}><span className="nav-icon-wrap"><Icon size={20} strokeWidth={isActive ? 2.4 : 1.8} /></span><span>{item.label}</span></a>; })}</nav>
 
-      {settingsOpen && <div className="modal-backdrop" onClick={() => setSettingsOpen(false)}><section className="modal-card settings-modal" onClick={(event) => event.stopPropagation()}><div className="modal-header"><div><p className="eyebrow">PENGATURAN</p><h2>Preferensi aplikasi</h2></div><button className="icon-button" onClick={() => setSettingsOpen(false)} aria-label="Tutup pengaturan"><X size={19} /></button></div><button className="settings-row" onClick={() => setTheme((value) => value === 'light' ? 'dark' : 'light')}><span className="settings-row-icon">{theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}</span><span><strong>Tampilan</strong><small>{theme === 'light' ? 'Mode terang' : 'Mode gelap'}</small></span><ChevronRight size={17} /></button><button className="settings-row" onClick={installApp}><span className="settings-row-icon"><Download size={18} /></span><span><strong>Pasang aplikasi</strong><small>Tambahkan Nurani ke layar utama</small></span><ChevronRight size={17} /></button><div className="settings-note"><ShieldCheck size={16} /><span>Preferensi, riwayat bacaan, dan bookmark disimpan secara lokal di perangkat ini. Tidak perlu membuat akun.</span></div></section></div>}
+      {settingsOpen && <div className="modal-backdrop" onClick={() => setSettingsOpen(false)}><section className="modal-card settings-modal" onClick={(event) => event.stopPropagation()}><div className="modal-header"><div><p className="eyebrow">PENGATURAN</p><h2>Preferensi aplikasi</h2><p className="muted">Atur tampilan dan lindungi data tilawahmu.</p></div><button className="icon-button" onClick={() => setSettingsOpen(false)} aria-label="Tutup pengaturan"><X size={19} /></button></div><button className="settings-row" onClick={() => setTheme((value) => value === 'light' ? 'dark' : 'light')}><span className="settings-row-icon">{theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}</span><span><strong>Tampilan</strong><small>{theme === 'light' ? 'Mode terang' : 'Mode gelap'}</small></span><ChevronRight size={17} /></button><button className="settings-row" onClick={installApp}><span className="settings-row-icon"><Download size={18} /></span><span><strong>Pasang aplikasi</strong><small>Tambahkan Nurani ke layar utama</small></span><ChevronRight size={17} /></button><section className="backup-section"><div className="backup-section-heading"><span className="settings-row-icon"><ShieldCheck size={18} /></span><div><strong>Cadangkan & pulihkan data</strong><small>Bookmark, progres, posisi bacaan, favorit, pengaturan, dan catatan tadabbur.</small></div></div><div className="backup-actions"><button type="button" className="button button-secondary" onClick={exportLocalBackup}><Download size={16} /> Ekspor cadangan</button><button type="button" className="button button-gold" onClick={() => backupFileInputRef.current?.click()}><Upload size={16} /> Impor cadangan</button><input ref={backupFileInputRef} className="backup-file-input" type="file" accept=".json,application/json" onChange={importLocalBackup} aria-label="Pilih file cadangan Nurani" /></div><p className="backup-privacy-note">Cadangan dibuat sebagai file JSON yang tersimpan di perangkat. File ini dapat berisi catatan pribadi—simpan di tempat yang aman dan jangan membagikannya secara publik. Impor hanya memproses key Nurani yang dikenal (maks. 5 MB).</p></section><div className="settings-note"><ShieldCheck size={16} /><span>Data utama tetap disimpan lokal di perangkat ini. Katalog surah dan doa yang dapat diambil ulang tidak dimasukkan ke file cadangan.</span></div></section></div>}
 
       {verseNotesModalOpen && <div className="modal-backdrop" onClick={() => setVerseNotesModalOpen(false)}><section className="modal-card verse-notes-modal" onClick={(event) => event.stopPropagation()}><div className="modal-header"><div><p className="eyebrow">CATATAN PRIBADI</p><h2>Semua catatan tadabbur</h2><p className="muted">{allVerseNotes.length} catatan tersimpan di perangkat ini.</p></div><button className="icon-button" onClick={() => setVerseNotesModalOpen(false)} aria-label="Tutup catatan"><X size={19} /></button></div><div className="verse-notes-modal-list">{allVerseNotes.map((note) => <div className="verse-notes-modal-item" key={`${note.surahId}:${note.verseNumber}`}><div className="verse-notes-modal-item-copy"><strong>{note.surahName} · Ayat {note.verseNumber}</strong><p>{note.text}</p><small>{new Date(note.updatedAt || Date.now()).toLocaleString('id-ID')}</small></div><div className="verse-notes-modal-item-actions"><button type="button" className="icon-button small" aria-label={`Buka ${note.surahName} ayat ${note.verseNumber}`} onClick={() => openVerseFromNote(note)}><ArrowRight size={16} /></button><button type="button" className="icon-button small note-delete-action" aria-label={`Hapus catatan ${note.surahName} ayat ${note.verseNumber}`} onClick={() => deleteVerseNote(`${note.surahId}:${note.verseNumber}`)}><Trash2 size={15} /></button></div></div>)}</div><div className="modal-footnote"><ShieldCheck size={15} /><span>Catatan hanya disimpan pada browser/perangkat ini. Catatan tidak diunggah ke server dan tidak tersinkron otomatis ke perangkat lain.</span></div></section></div>}
 

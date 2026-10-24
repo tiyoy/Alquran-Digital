@@ -498,7 +498,16 @@ h1, h2, h3, p { margin-top: 0; }
 .modal-loading { display: flex; align-items: center; gap: 9px; min-height: 120px; color: var(--muted); font-size: 11px; }
 .modal-footnote, .settings-note { display: flex; align-items: flex-start; gap: 9px; margin-top: 19px; padding: 13px; border-radius: 12px; color: var(--muted); background: var(--surface-muted); font-size: 10px; line-height: 1.65; }
 .modal-footnote svg, .settings-note svg { flex: 0 0 auto; margin-top: 1px; color: var(--emerald); }
-.settings-modal { width: min(100%, 440px); }
+.settings-modal { width: min(100%, 500px); }
+.backup-section { margin-top: 17px; padding: 15px; border: 1px solid var(--line); border-radius: 17px; background: var(--surface-muted); }
+.backup-section-heading { display: flex; align-items: flex-start; gap: 11px; }
+.backup-section-heading > div { display: flex; flex-direction: column; gap: 5px; }
+.backup-section-heading strong { font-size: 12px; line-height: 1.5; }
+.backup-section-heading small { color: var(--muted); font-size: 10px; line-height: 1.7; }
+.backup-actions { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 14px; }
+.backup-actions .button { flex: 1 1 150px; min-width: 0; padding: 0 11px; white-space: normal; }
+.backup-file-input { display: none; }
+.backup-privacy-note { margin: 12px 0 0; color: var(--muted); font-size: 10px; line-height: 1.7; }
 .settings-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 70px; padding: 10px 0; border: 0; border-bottom: 1px solid var(--line); color: var(--ink); background: transparent; text-align: left; }
 .settings-row-icon { display: grid; place-items: center; width: 39px; height: 39px; flex: 0 0 auto; border-radius: 13px; color: var(--emerald); background: var(--emerald-pale); }
 .settings-row > span:nth-child(2) { display: flex; flex: 1; flex-direction: column; gap: 5px; }
@@ -823,3 +832,5 @@ h1, h2, h3, p { margin-top: 0; }
   line-height: 1.7;
 }
 .system-feedback-footnote { display: block; max-width: 360px; margin: 21px auto 0; }
+
+@media (max-width: 480px) { .backup-actions { flex-direction: column; } .backup-actions .button { width: 100%; flex-basis: auto; } }

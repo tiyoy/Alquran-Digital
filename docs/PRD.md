@@ -120,3 +120,11 @@ alquran-digital-nextjs/
 
 ### Pembaruan implementasi v1.8.0
 - **Catatan pribadi per ayat (Tadabbur Notes):** pengguna dapat membuat, mengedit, menghapus, dan meninjau catatan yang disimpan lokal per ayat. Catatan tidak tersinkron ke server/perangkat lain.
+
+
+### Pembaruan implementasi v1.9.0
+
+- Menambahkan ekspor/impor data lokal melalui file JSON tervalidasi.
+- Backup mencakup bookmark, catatan tadabbur, posisi bacaan terakhir, progres membaca, target khatam, pengulangan audio, favorit Asmaul Husna, tema, dan preferensi pembaca.
+- Impor dibatasi 5 MB, hanya dapat menulis key cadangan yang dikenal, menampilkan konfirmasi, dan mempertahankan kategori yang tidak ada dalam file.
+- Detail format dan perilaku ada di `docs/LOCAL-DATA-BACKUP.md`.
