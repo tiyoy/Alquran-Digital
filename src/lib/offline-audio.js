@@ -19,9 +19,9 @@ export function inferOfflineAudioReciterId(src, reciterName = '') {
 
 export function normalizeOfflineAudioTracks(value) {
   if (!Array.isArray(value)) return [];
-  // Keep one track for each surah + Qari, not just one track per surah. This lets
-  // users store more than one reciter for a surah and manage each independently.
-  const bySurahAndReciter = new Map();
+  // Full-surah tracks and verse-level tracks have distinct stable keys so a small
+  // verse download never replaces an entire surah (or another verse) for the same Qari.
+  const byTrackKey = new Map();
   for (const item of value) {
     const surahId = Number(item?.surahId);
     const src = String(item?.src || '').trim();
@@ -33,26 +33,39 @@ export function normalizeOfflineAudioTracks(value) {
     const reciter = String(item?.reciter || 'Qari pilihan').slice(0, 100);
     const requestedId = String(item?.reciterId || '');
     const reciterId = /^0[1-6]$/.test(requestedId) ? requestedId : inferOfflineAudioReciterId(parsedUrl.href, reciter);
-    const trackKey = `${surahId}:${reciterId || parsedUrl.href}`;
-    bySurahAndReciter.set(trackKey, {
+    const verseNumber = Number(item?.verseNumber);
+    const type = item?.type === 'verse' && Number.isInteger(verseNumber) && verseNumber > 0 && verseNumber <= 286 ? 'verse' : 'full';
+    const normalizedVerseNumber = type === 'verse' ? verseNumber : 0;
+    const trackKey = `${surahId}:${reciterId || parsedUrl.href}:${type}:${normalizedVerseNumber}`;
+    byTrackKey.set(trackKey, {
       surahId,
+      type,
+      verseNumber: normalizedVerseNumber,
       src: parsedUrl.href,
       reciterId,
-      title: String(item?.title || `Surah ${surahId}`).slice(0, 100),
+      title: String(item?.title || `Surah ${surahId}${type === 'verse' ? ` · Ayat ${normalizedVerseNumber}` : ''}`).slice(0, 100),
       reciter,
       bytes: Math.floor(bytes),
       savedAt: Number.isFinite(Number(item?.savedAt)) ? Number(item.savedAt) : 0
     });
   }
-  return [...bySurahAndReciter.values()].sort((a, b) => a.surahId - b.surahId || String(a.reciterId || a.reciter).localeCompare(String(b.reciterId || b.reciter)));
+  return [...byTrackKey.values()].sort((a, b) => a.surahId - b.surahId
+    || String(a.reciterId || a.reciter).localeCompare(String(b.reciterId || b.reciter))
+    || a.type.localeCompare(b.type)
+    || a.verseNumber - b.verseNumber);
 }
 
 export function upsertOfflineAudioTrack(tracks, track) {
   const normalizedTrack = normalizeOfflineAudioTracks([track])[0];
   if (!normalizedTrack) return normalizeOfflineAudioTracks(tracks);
   return normalizeOfflineAudioTracks([
-    ...normalizeOfflineAudioTracks(tracks).filter((item) => !(item.surahId === normalizedTrack.surahId
-      && ((normalizedTrack.reciterId && item.reciterId === normalizedTrack.reciterId) || item.src === normalizedTrack.src))),
+    ...normalizeOfflineAudioTracks(tracks).filter((item) => {
+      const sameSlot = item.surahId === normalizedTrack.surahId
+        && item.reciterId === normalizedTrack.reciterId
+        && item.type === normalizedTrack.type
+        && (normalizedTrack.type === 'full' || item.verseNumber === normalizedTrack.verseNumber);
+      return !sameSlot && item.src !== normalizedTrack.src;
+    }),
     normalizedTrack
   ]);
 }

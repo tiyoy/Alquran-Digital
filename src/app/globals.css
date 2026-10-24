@@ -203,6 +203,10 @@ h1, h2, h3, p { margin-top: 0; }
 .reader-surah-heading p { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin: 0; color: #c4e2d0; font-size: 10px; }
 .reader-surah-arabic { color: #f2d28e; font-family: 'Amiri Quran', serif; font-size: 31px; line-height: 1.5; white-space: nowrap; }
 .bismillah { margin: 22px auto 15px; color: #f5d796; font-family: 'Amiri Quran', 'Scheherazade New', serif; font-size: clamp(26px, 5vw, 35px); text-align: center; line-height: 2; }
+.verse-audio-download-tip { display: flex; align-items: flex-start; gap: 8px; margin: 0 0 14px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface-muted); color: var(--muted); font-size: 10px; line-height: 1.65; }
+.verse-audio-download-tip svg { flex: 0 0 auto; margin-top: 2px; color: var(--emerald); }
+.verse-audio-download-tip strong { color: var(--ink); }
+
 .reader-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .reader-actions .button { min-height: 39px; padding: 0 12px; font-size: 10px; }
 .reader-settings { margin: 14px 0; padding: 17px; animation: page-in .22s ease both; }

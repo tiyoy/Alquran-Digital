@@ -1,4 +1,4 @@
-const AUDIO_PATH_PATTERN = /^\/audio-full\/[a-z0-9-]+\/\d{3}\.mp3$/i;
+const AUDIO_PATH_PATTERN = /^\/audio[a-z0-9-]*(?:\/[a-z0-9_-]+){1,5}\.mp3$/i;
 const ALLOWED_AUDIO_HOST = 'cdn.equran.id';
 
 export const runtime = 'nodejs';
@@ -30,10 +30,10 @@ function jsonError(message, status = 502) {
 }
 
 /**
- * Same-origin streaming proxy for EQuran full-surah MP3s.
+ * Same-origin streaming proxy for EQuran full-surah and individual-verse MP3s.
  * Browser-side fetch to the CDN can fail when the CDN does not expose CORS headers;
  * this route keeps the file streamed instead of buffering the whole response in a
- * Vercel Function. Only the documented EQuran audio-full path is permitted.
+ * Vercel Function. Only MP3 paths within the official EQuran audio namespace are permitted; arbitrary hosts and paths are rejected.
  */
 export async function GET(request) {
   const requestUrl = new URL(request.url);
@@ -49,7 +49,7 @@ export async function GET(request) {
     return jsonError('URL audio tidak valid.', 400);
   }
   if (!isAllowedAudioUrl(source)) {
-    return jsonError('Sumber dibatasi ke file MP3 audio-full resmi CDN EQuran.', 400);
+    return jsonError('Sumber dibatasi ke file MP3 audio resmi CDN EQuran.', 400);
   }
 
   const outgoingHeaders = new Headers();
