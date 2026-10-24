@@ -29,12 +29,15 @@ import {
   fetchQuran, firstArray, normalizeSurah, normalizeVerse, unwrapPayload
 } from '@/lib/api';
 
+// Keep the familiar default (Misyari) first; api.js maps these display positions
+// to EQuran's real IDs: 05, 03, 01, 02, 04, and 06 respectively.
 const QARIS = [
   'Sheikh Misyari Rasyid Al-Afasi',
   'Sheikh Abdurrahman As-Sudais',
   'Sheikh Abdullah Al-Juhany',
   'Sheikh Abdul Muhsin Al-Qasim',
-  'Sheikh Ibrahim Al-Dossari'
+  'Sheikh Ibrahim Al-Dossari',
+  'Sheikh Yasser Al-Dosari'
 ];
 const NAV_ITEMS = [
   { id: 'home', label: 'Beranda', icon: Home },
@@ -675,6 +678,17 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
     return !q || [name.latin, name.arabic, name.meaning, name.number].join(' ').toLowerCase().includes(q)
       || (q === 'favorit' && favoriteAsma.includes(name.number));
   }), [asmaQuery, favoriteAsma]);
+  const selectedSurahWithAudio = useMemo(() => {
+    if (!selectedSurah) return null;
+    const catalogSurah = surahs.find((item) => Number(item.nomor) === Number(selectedSurah.nomor));
+    if (!catalogSurah) return selectedSurah;
+    return {
+      ...catalogSurah,
+      ...selectedSurah,
+      audioFull: selectedSurah.audioFull ?? catalogSurah.audioFull ?? null,
+      audio: selectedSurah.audio ?? catalogSurah.audio ?? null
+    };
+  }, [surahs, selectedSurah]);
   const allVerseNotes = useMemo(() => Object.values(verseNotes).sort((a, b) => b.updatedAt - a.updatedAt), [verseNotes]);
   const recentVerseNotes = useMemo(() => allVerseNotes.slice(0, 3), [allVerseNotes]);
   const todayKey = jakartaDateKey();
@@ -850,8 +864,9 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
     window.setTimeout(() => document.getElementById(`verse-${selectedSurah?.nomor}-${verse.nomorAyat}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100);
   };
   const playFullSurah = async () => {
-    if (!selectedSurah) return;
-    const src = chooseAudio(selectedSurah.audioFull, qariIndex);
+    if (!selectedSurahWithAudio) return;
+    const audioSurah = selectedSurahWithAudio;
+    const src = chooseAudio(audioSurah.audioFull, qariIndex);
     if (!src) { showToast('Audio penuh surah belum tersedia pada data yang diterima.'); return; }
     audioRef.current?.pause();
     releaseAudioObjectUrl();
@@ -873,16 +888,37 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
         return;
       }
     }
-    setAudioInfo({ src: playableSrc, originalSrc: src, title: selectedSurah.namaLatin, subtitle: `Murottal · ${QARIS[qariIndex]}`, trackType: 'full', surahNumber: selectedSurah.nomor, verseIndex: 0 });
+    setAudioInfo({ src: playableSrc, originalSrc: src, title: audioSurah.namaLatin, subtitle: `Murottal · ${QARIS[qariIndex]}`, trackType: 'full', surahNumber: audioSurah.nomor, verseIndex: 0 });
   };
 
   const downloadCurrentSurahAudio = async () => {
-    if (!selectedSurah) return;
+    if (!selectedSurahWithAudio) return;
+    let audioSurah = selectedSurahWithAudio;
     if (!navigator.onLine) { showToast('Sambungkan internet sebelum mengunduh audio murottal.'); return; }
     if (audioDownloadInFlightRef.current) { showToast('Tunggu unduhan audio yang sedang berjalan selesai.'); return; }
-    const surahId = Number(selectedSurah.nomor);
-    const src = chooseAudio(selectedSurah.audioFull, qariIndex);
-    if (!src) { showToast('Sumber audio penuh tidak tersedia untuk qari ini.'); return; }
+    const surahId = Number(audioSurah.nomor);
+    let src = chooseAudio(audioSurah.audioFull, qariIndex);
+    if (!src) {
+      // Direct reader routes and older localStorage catalogues may lack audioFull.
+      // Refresh just this surah's metadata on demand before giving up on download.
+      try {
+        const payload = await fetchQuran(`/surat/${surahId}`);
+        const refreshedSurah = normalizeSurah(payload, surahId - 1);
+        src = chooseAudio(refreshedSurah.audioFull, qariIndex);
+        if (src) {
+          setSurahs((current) => current.map((item) => Number(item.nomor) === surahId
+            ? { ...item, ...refreshedSurah, audioFull: refreshedSurah.audioFull ?? item.audioFull }
+            : item));
+          setSelectedSurah((current) => current && Number(current.nomor) === surahId
+            ? { ...current, ...refreshedSurah, audioFull: refreshedSurah.audioFull ?? current.audioFull }
+            : current);
+          audioSurah = { ...audioSurah, ...refreshedSurah, audioFull: refreshedSurah.audioFull ?? audioSurah.audioFull };
+        }
+      } catch {
+        // The actionable message below explains the required network/API fallback.
+      }
+    }
+    if (!src) { showToast('Sumber audio untuk qari ini belum tersedia. Periksa internet lalu coba buka ulang surah.'); return; }
     let parsedSource;
     try { parsedSource = new URL(src); } catch { showToast('Alamat sumber audio tidak valid.'); return; }
     if (parsedSource.protocol !== 'https:') { showToast('Unduhan hanya diizinkan dari sumber audio HTTPS.'); return; }
@@ -891,19 +927,19 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
       return;
     }
     audioDownloadInFlightRef.current = true;
-    setAudioDownloadProgress({ surahId, loaded: 0, total: 0, title: selectedSurah.namaLatin });
+    setAudioDownloadProgress({ surahId, loaded: 0, total: 0, title: audioSurah.namaLatin });
     try {
       const cache = await caches.open(OFFLINE_AUDIO_CACHE_NAME);
       const existing = await cache.match(src);
       if (existing) {
         const existingBytes = Number(existing.headers.get('content-length')) || offlineAudioTracks.find((track) => track.src === src)?.bytes || 0;
         const priorTrack = offlineAudioTracks.find((track) => track.surahId === surahId);
-        const nextTracks = upsertOfflineAudioTrack(offlineAudioTracks, { surahId, src, title: selectedSurah.namaLatin, reciter: QARIS[qariIndex], bytes: existingBytes, savedAt: Date.now() });
+        const nextTracks = upsertOfflineAudioTrack(offlineAudioTracks, { surahId, src, title: audioSurah.namaLatin, reciter: QARIS[qariIndex], bytes: existingBytes, savedAt: Date.now() });
         if (!writeLocal(OFFLINE_AUDIO_STORAGE_KEY, nextTracks)) throw new Error('Penyimpanan metadata penuh.');
         if (priorTrack?.src && priorTrack.src !== src) await cache.delete(priorTrack.src);
         setOfflineAudioTracks(nextTracks);
         await refreshOfflineAudioStats(nextTracks);
-        showToast(`Audio ${selectedSurah.namaLatin} sudah tersedia offline.`);
+        showToast(`Audio ${audioSurah.namaLatin} sudah tersedia offline.`);
         return;
       }
 
@@ -948,7 +984,7 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
             }
             chunks.push(value);
             if (loaded - lastReported >= 512 * 1024 || loaded === declaredLength) {
-              setAudioDownloadProgress({ surahId, loaded, total: declaredLength, title: selectedSurah.namaLatin });
+              setAudioDownloadProgress({ surahId, loaded, total: declaredLength, title: audioSurah.namaLatin });
               lastReported = loaded;
             }
           }
@@ -964,11 +1000,11 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
       if (!blob.size) throw new Error('Sumber audio mengembalikan file kosong.');
       if (blob.size > MAX_AUDIO_TRACK_BYTES) throw new Error('Ukuran audio melebihi batas 80 MB per surah.');
       if (totalWithoutThisSurah + blob.size > MAX_TOTAL_AUDIO_BYTES) throw new Error('Batas total audio offline 200 MB akan terlampaui. Hapus audio lain terlebih dahulu.');
-      setAudioDownloadProgress({ surahId, loaded: blob.size, total: blob.size, title: selectedSurah.namaLatin });
+      setAudioDownloadProgress({ surahId, loaded: blob.size, total: blob.size, title: audioSurah.namaLatin });
       const contentType = blob.type || response.headers.get('content-type') || 'audio/mpeg';
       const cacheResponse = new Response(blob, { status: 200, headers: { 'Content-Type': contentType, 'Content-Length': String(blob.size), 'Cache-Control': 'public, max-age=31536000' } });
       await cache.put(src, cacheResponse);
-      const track = { surahId, src, title: selectedSurah.namaLatin, reciter: QARIS[qariIndex], bytes: blob.size, savedAt: Date.now() };
+      const track = { surahId, src, title: audioSurah.namaLatin, reciter: QARIS[qariIndex], bytes: blob.size, savedAt: Date.now() };
       const nextTracks = upsertOfflineAudioTrack(offlineAudioTracks, track);
       if (!writeLocal(OFFLINE_AUDIO_STORAGE_KEY, nextTracks)) {
         await cache.delete(src);
@@ -977,7 +1013,7 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
       if (priorTrack?.src && priorTrack.src !== src) await cache.delete(priorTrack.src);
       setOfflineAudioTracks(nextTracks);
       await refreshOfflineAudioStats(nextTracks);
-      showToast(`Audio ${selectedSurah.namaLatin} tersimpan offline (${formatStorageBytes(blob.size)}).`);
+      showToast(`Audio ${audioSurah.namaLatin} tersimpan offline (${formatStorageBytes(blob.size)}).`);
     } catch (error) {
       const message = String(error?.message || '');
       if (/Batas total|melebihi batas|Ruang penyimpanan|Metadata audio|metadata penuh|file kosong/i.test(message)) showToast(message);
@@ -1465,7 +1501,7 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
     </div>
   );
 
-  const currentFullAudioSrc = selectedSurah ? chooseAudio(selectedSurah.audioFull, qariIndex) : '';
+  const currentFullAudioSrc = selectedSurahWithAudio ? chooseAudio(selectedSurahWithAudio.audioFull, qariIndex) : '';
   const currentAudioTrackSaved = Boolean(currentFullAudioSrc && offlineAudioStats.cachedSrcs.includes(currentFullAudioSrc));
   const currentAudioDownloadProgress = audioDownloadProgress?.surahId === Number(selectedSurah?.nomor) ? audioDownloadProgress : null;
   const currentAudioDownloadPercent = currentAudioDownloadProgress?.total
@@ -1478,7 +1514,7 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
       <section className="reader-surah-hero">
         <div className="reader-surah-heading"><div><p className="eyebrow">SURAH KE-{selectedSurah?.nomor || '—'}</p><h1>{selectedSurah?.namaLatin}</h1><p>{selectedSurah?.arti} <span>·</span> {selectedSurah?.tempatTurun || 'Al-Qur’an'} <span>·</span> {selectedSurah?.jumlahAyat || verses.length} ayat</p></div><div className="reader-surah-arabic" dir="rtl">{selectedSurah?.nama || ''}</div></div>
         <div className="bismillah" dir="rtl">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</div>
-        <div className="reader-actions"><button className="button button-gold" onClick={playFullSurah}><Play size={16} fill="currentColor" /> Putar satu surah</button><button className="button button-glass" onClick={() => openTafsir()}><BookOpen size={16} /> Tafsir</button><button className={`button button-glass ${currentAudioTrackSaved ? 'selected' : ''}`} onClick={downloadCurrentSurahAudio} disabled={!currentFullAudioSrc || !online || Boolean(currentAudioDownloadProgress) || currentAudioTrackSaved} title={!online ? 'Sambungkan internet untuk mengunduh' : currentAudioTrackSaved ? 'Audio sudah disimpan di perangkat' : 'Unduh audio murottal untuk didengarkan offline'}>{currentAudioDownloadProgress ? <><LoaderCircle size={15} className="spin" /> {currentAudioDownloadPercent === null ? formatStorageBytes(currentAudioDownloadProgress.loaded) : `${currentAudioDownloadPercent}%`}</> : currentAudioTrackSaved ? <><Check size={15} /> Audio tersimpan</> : <><Headphones size={15} /> Unduh audio</>}</button><button className={`button button-glass ${offlineSurahs.includes(Number(selectedSurah?.nomor)) ? 'selected' : ''}`} onClick={saveCurrentSurahOffline} disabled={!verses.length || offlineSurahs.includes(Number(selectedSurah?.nomor))}>{offlineSurahs.includes(Number(selectedSurah?.nomor)) ? <Check size={16} /> : <Download size={16} />} {offlineSurahs.includes(Number(selectedSurah?.nomor)) ? 'Tersimpan offline' : 'Simpan offline'}</button><button className={`button button-glass ${readerSettingsOpen ? 'selected' : ''}`} onClick={() => setReaderSettingsOpen((value) => !value)}><SlidersHorizontal size={16} /> Tampilan</button></div>
+        <div className="reader-actions"><button className="button button-gold" onClick={playFullSurah}><Play size={16} fill="currentColor" /> Putar satu surah</button><button className="button button-glass" onClick={() => openTafsir()}><BookOpen size={16} /> Tafsir</button><button className={`button button-glass ${currentAudioTrackSaved ? 'selected' : ''}`} onClick={downloadCurrentSurahAudio} disabled={!online || Boolean(currentAudioDownloadProgress) || currentAudioTrackSaved} title={!online ? 'Sambungkan internet untuk mengunduh' : currentAudioTrackSaved ? 'Audio qari ini sudah disimpan di perangkat' : !currentFullAudioSrc ? 'Sumber audio belum termuat; klik untuk melihat petunjuk' : 'Unduh audio qari yang dipilih untuk didengarkan offline'}>{currentAudioDownloadProgress ? <><LoaderCircle size={15} className="spin" /> {currentAudioDownloadPercent === null ? formatStorageBytes(currentAudioDownloadProgress.loaded) : `${currentAudioDownloadPercent}%`}</> : currentAudioTrackSaved ? <><Check size={15} /> Audio tersimpan</> : <><Headphones size={15} /> Unduh audio</>}</button><button className={`button button-glass ${offlineSurahs.includes(Number(selectedSurah?.nomor)) ? 'selected' : ''}`} onClick={saveCurrentSurahOffline} disabled={!verses.length || offlineSurahs.includes(Number(selectedSurah?.nomor))}>{offlineSurahs.includes(Number(selectedSurah?.nomor)) ? <Check size={16} /> : <Download size={16} />} {offlineSurahs.includes(Number(selectedSurah?.nomor)) ? 'Tersimpan offline' : 'Simpan offline'}</button><button className={`button button-glass ${readerSettingsOpen ? 'selected' : ''}`} onClick={() => setReaderSettingsOpen((value) => !value)}><SlidersHorizontal size={16} /> Tampilan</button></div>
         {currentAudioDownloadProgress && <div className="audio-download-progress" role="status"><div className="audio-download-progress-copy"><span>Mengunduh audio {currentAudioDownloadProgress.title}</span><strong>{currentAudioDownloadPercent === null ? formatStorageBytes(currentAudioDownloadProgress.loaded) : `${currentAudioDownloadPercent}%`}</strong></div><div className="audio-download-progress-track"><span style={{ width: `${currentAudioDownloadPercent ?? 8}%` }} /></div><small>Jangan tutup halaman sampai unduhan selesai.</small></div>}
       </section>
       {readerSettingsOpen && <section className="reader-settings card-surface">

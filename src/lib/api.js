@@ -81,29 +81,52 @@ export function firstArray(value, keys = []) {
   return [];
 }
 
+// The visible selector keeps Misyari as its first/default choice, while EQuran's
+// audio IDs are 01=Juhany, 02=Qasim, 03=Sudais, 04=Dossari, 05=Misyari, 06=Yasser.
+// Keep this mapping aligned with the QARIS options in NuraniApp.jsx.
+const RECITER_IDS_BY_UI_INDEX = ['05', '03', '01', '02', '04', '06'];
+
+function extractAudioUrl(value) {
+  const candidate = typeof value === 'string'
+    ? value
+    : value && typeof value === 'object'
+      ? (value.url || value.audio || value.src || '')
+      : '';
+  return /^https?:\/\//i.test(String(candidate)) ? String(candidate) : '';
+}
+
 export function chooseAudio(audio, reciterIndex = 0) {
   if (!audio) return '';
-  if (typeof audio === 'string') return audio;
+  if (typeof audio === 'string') return extractAudioUrl(audio);
+
+  const safeIndex = Number.isInteger(Number(reciterIndex)) && Number(reciterIndex) >= 0
+    ? Number(reciterIndex)
+    : 0;
+  const reciterId = RECITER_IDS_BY_UI_INDEX[safeIndex] || String(safeIndex + 1).padStart(2, '0');
+
   if (Array.isArray(audio)) {
-    const row = audio[reciterIndex] || audio[0];
-    return typeof row === 'string' ? row : (row?.url || row?.audio || row?.src || '');
+    // Most API responses follow the documented ID order (01 through 06).
+    // Only fall back to the UI position when the ID-indexed item is absent.
+    const row = audio[Number(reciterId) - 1] ?? audio[safeIndex];
+    const selectedUrl = extractAudioUrl(row);
+    if (selectedUrl) return selectedUrl;
+    const availableUrls = [...new Set(audio.map(extractAudioUrl).filter(Boolean))];
+    return availableUrls.length === 1 ? availableUrls[0] : '';
   }
-  const preferredKeys = [String(reciterIndex + 1).padStart(2, '0'), String(reciterIndex + 1), `qari${reciterIndex + 1}`];
+
+  if (typeof audio !== 'object') return '';
+  const numericId = String(Number(reciterId));
+  const preferredKeys = [
+    reciterId, numericId, `qari${reciterId}`, `qari${numericId}`,
+    `audio${reciterId}`, `audio${numericId}`
+  ];
   for (const key of preferredKeys) {
-    const value = audio[key];
-    if (typeof value === 'string' && /^https?:/i.test(value)) return value;
-    if (value && typeof value === 'object') {
-      const url = value.url || value.audio || value.src;
-      if (url) return url;
-    }
+    const selectedUrl = extractAudioUrl(audio[key]);
+    if (selectedUrl) return selectedUrl;
   }
-  const values = Object.values(audio);
-  for (const value of values) {
-    if (typeof value === 'string' && /^https?:/i.test(value)) return value;
-    if (value && typeof value === 'object') {
-      const url = value.url || value.audio || value.src;
-      if (url) return url;
-    }
-  }
-  return '';
+
+  // Do not silently play a different reciter when a multi-qari payload uses an
+  // unexpected shape. A single-source legacy response is safe to use for all choices.
+  const availableUrls = [...new Set(Object.values(audio).map(extractAudioUrl).filter(Boolean))];
+  return availableUrls.length === 1 ? availableUrls[0] : '';
 }
