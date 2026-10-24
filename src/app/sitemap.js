@@ -2,8 +2,10 @@ import { siteUrl } from '@/lib/site-config';
 import { SECTION_ROUTES } from '@/lib/section-routes';
 import { fallbackSurahs } from '@/lib/data';
 import { getSurahPath, getVersePath } from '@/lib/surah-routes';
+import { getDuaPath } from '@/lib/dua-routes';
+import { getServerDuaCatalog } from '@/lib/server-duas';
 
-export default function sitemap() {
+export default async function sitemap() {
   const sectionUrls = SECTION_ROUTES.map(({ path, tab }) => ({
     url: path === '/' ? `${siteUrl}/` : `${siteUrl}${path}`,
     changeFrequency: tab === 'prayer' ? 'daily' : tab === 'asma' ? 'monthly' : 'weekly',
@@ -24,5 +26,12 @@ export default function sitemap() {
     }))
   );
 
-  return [...sectionUrls, ...surahUrls, ...verseUrls];
+  const duaCatalog = await getServerDuaCatalog();
+  const duaUrls = duaCatalog.map((dua, index) => ({
+    url: `${siteUrl}${getDuaPath(dua, index)}`,
+    changeFrequency: 'monthly',
+    priority: 0.65
+  }));
+
+  return [...sectionUrls, ...duaUrls, ...surahUrls, ...verseUrls];
 }

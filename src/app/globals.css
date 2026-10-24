@@ -323,6 +323,14 @@ h1, h2, h3, p { margin-top: 0; }
 .dua-heading-copy small { color: var(--muted); font-size: 9px; }
 .dua-expand-icon { display: grid; place-items: center; width: 31px; height: 31px; flex: 0 0 auto; border-radius: 10px; color: var(--emerald); background: var(--emerald-pale); }
 .dua-preview { padding: 0 20px 18px; }
+.dua-card-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; margin-top: 10px; }
+.dua-card-actions .text-link { min-height: 30px; }
+.dua-detail-card { padding: clamp(20px, 4vw, 34px); }
+.dua-detail-arabic { margin: 0 0 20px; font-size: clamp(30px, 5vw, 43px); line-height: 2.1; }
+.dua-detail-translation { margin: 0 0 20px; color: var(--ink-soft); font-size: 13px; line-height: 1.9; }
+.dua-detail-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line); }
+.dua-back-link { align-self: flex-start; gap: 7px; }
+
 .dua-arabic { margin: 2px 0 10px; color: var(--emerald-deep); font-family: 'Amiri Quran', 'Scheherazade New', serif; font-size: clamp(23px, 3vw, 30px); line-height: 2; text-align: right; }
 .dua-translation { margin: 0; color: var(--ink-soft); font-size: 11px; line-height: 1.8; }
 .dua-expanded { padding: 0 20px 18px; animation: page-in .2s ease both; }
@@ -596,6 +604,10 @@ h1, h2, h3, p { margin-top: 0; }
   .dua-hero p:not(.eyebrow) { max-width: 235px; font-size: 10px; }
   .dua-hero-symbol { width: 71px; height: 71px; font-size: 31px; box-shadow: inset 0 0 0 5px rgba(255,255,255,.04); }
   .dua-card-trigger { padding: 12px; }
+  .dua-preview { padding: 0 14px 14px; }
+  .dua-card-actions { gap: 13px; }
+  .dua-detail-actions .button { flex: 1; }
+  .dua-detail-card { padding: 17px; }
   .dua-preview { padding: 0 14px 15px; }
   .dua-arabic { font-size: 25px; }
   .dua-translation { font-size: 10px; }

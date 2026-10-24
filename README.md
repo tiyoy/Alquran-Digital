@@ -15,7 +15,7 @@
   <img alt="Tailwind CSS" src="https://img.shields.io/badge/Tailwind_CSS-v3-06B6D4?logo=tailwindcss&logoColor=white" />
   <img alt="PWA" src="https://img.shields.io/badge/PWA-Installable-5A0FC8?logo=pwa&logoColor=white" />
   <img alt="Bahasa Indonesia" src="https://img.shields.io/badge/Bahasa-Indonesia-059669" />
-  <img alt="Versi aplikasi 1.4.0" src="https://img.shields.io/badge/Versi-1.4.0-059669" />
+  <img alt="Versi aplikasi 1.7.0" src="https://img.shields.io/badge/Versi-1.7.0-059669" />
 </p>
 
 <p align="center">
@@ -42,7 +42,21 @@ Setiap surah memiliki halaman statis dengan URL yang mudah dibagikan, misalnya:
 - `https://nurani-tiyoy.vercel.app/quran/2-al-baqarah`
 - `https://nurani-tiyoy.vercel.app/quran/36-yasin`
 
+Setiap doa harian juga memiliki URL individual, misalnya `/doa/1-doa-sebelum-makan`, sehingga bacaan Arab, Latin, terjemahan, dan sumber dapat dibagikan langsung.
+
 Next.js membangun 114 route dari metadata surah lokal. Setiap route menyediakan title, deskripsi, canonical URL, Open Graph, dan Twitter Card khusus. Daftar surah menampilkan anchor HTML yang bisa diikuti crawler, sedangkan klik normal tetap membuka pembaca di dalam aplikasi tanpa reload.
+
+## Fitur terbaru — v1.7.1
+
+- URL detail individual untuk doa harian dengan pola `/doa/{id}-{slug-judul}`, contoh `/doa/1-doa-sebelum-makan`.
+- Setiap kartu doa memiliki aksi **Bagikan doa** dan **Buka doa**.
+- Halaman doa individual menyediakan bacaan Arab, Latin, terjemahan, sumber, tombol salin, dan tombol berbagi.
+- Setiap doa memiliki metadata SEO (title, description, canonical, Open Graph, dan Twitter Card).
+- Sitemap memasukkan URL doa individual berdasarkan katalog yang berhasil dimuat dari sumber data.
+- Cache service worker dinaikkan ke `nurani-pwa-v15` dan beberapa URL doa cadangan dimasukkan ke app shell.
+
+Sebelum deployment, jalankan `npm run lint` dan `npm run build`. Detail doa dari API dicache di server selama 24 jam; jika API tidak tersedia, lima doa cadangan yang dibundel tetap bisa dibuka.
+
 
 ## Fitur utama
 
@@ -57,7 +71,7 @@ Next.js membangun 114 route dari metadata surah lokal. Setiap route menyediakan 
 | 🎧 **Audio murottal** | Pilihan lima qari sesuai PRD, pemutaran surah/ayat, penyorotan ayat yang aktif, dan pemutar yang tetap mudah dijangkau. Ketersediaan audio mengikuti respons sumber data. |
 | 📚 **Tafsir** | Tampilan tafsir surah/ayat berdasarkan data yang disediakan API. |
 | 🕌 **Jadwal shalat** | Pencarian kota/kabupaten di Indonesia, filter wilayah pulau, dan wilayah awal **Kab. Bogor**. |
-| 🤲 **Doa harian** | Pencarian doa, teks Arab, latin, terjemahan, salin bacaan, serta data cadangan lokal. |
+| 🤲 **Doa harian** | Pencarian doa, teks Arab, Latin, terjemahan, salin bacaan, URL individual, tombol berbagi, metadata SEO, serta data cadangan lokal. |
 | ✨ **Asmaul Husna** | 99 nama Allah, pencarian, dan favorit lokal. |
 | 🌗 **Tema & responsivitas** | Mode terang/gelap, antarmuka mobile-first, navigasi bawah di layar kecil, dan target sentuh yang ramah pengguna. |
 | 📲 **PWA** | Manifest, ikon aplikasi, prompt instalasi, service worker, halaman offline, dan cache progresif untuk sebagian data. |

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import {
   ArrowRight, AudioLines, Bookmark, BookMarked, BookOpen, CalendarDays, Check,
   ChevronDown, ChevronLeft, ChevronRight, Clock3, Copy, Download, HandHeart,
@@ -9,6 +10,8 @@ import {
   Share2, SlidersHorizontal, Sparkles, Sun, Wifi, WifiOff, X, Repeat, Target
 } from 'lucide-react';
 import { asmaulHusna, enforceBeforeMealDua, fallbackDuas, fallbackSurahs, MIN_DUA_CATALOG_SIZE } from '@/lib/data';
+import { extractDuaRows, isUsableDua, normalizeDua } from '@/lib/duas';
+import { getDuaPath, getDuaSlug, getDuaSlugFromPathname } from '@/lib/dua-routes';
 import { PATH_TABS, SECTION_SEO_BY_TAB, TAB_PATHS, VALID_TABS } from '@/lib/section-routes';
 import { getSurahNumberFromPathname, getSurahPath, getVerseNumberFromPathname, getVersePath } from '@/lib/surah-routes';
 import { siteName, siteUrl } from '@/lib/site-config';
@@ -41,6 +44,14 @@ const PRAYERS = [
 ];
 
 const EMPTY_INITIAL_VERSES = [];
+function mergeInitialDua(rows, initialDua) {
+  if (!initialDua) return rows;
+  const normalized = normalizeDua(initialDua);
+  const slug = getDuaSlug(normalized);
+  const existing = rows.findIndex((row, index) => getDuaSlug(row, index) === slug);
+  if (existing >= 0) return rows.map((row, index) => index === existing ? normalized : row);
+  return [...rows, normalized];
+}
 const TOTAL_QURAN_VERSES = 6236;
 const KHATAM_OPTIONS = [30, 60, 90];
 const AUDIO_REPEAT_OPTIONS = [
@@ -66,100 +77,6 @@ function readLocal(key, fallback) {
 }
 function writeLocal(key, value) {
   try { window.localStorage.setItem(key, JSON.stringify(value)); return true; } catch { return false; /* Storage can be disabled or full. */ }
-}
-function readDuaText(value) {
-  if (typeof value === 'string' || typeof value === 'number') return String(value).trim();
-  if (Array.isArray(value)) return value.map(readDuaText).filter(Boolean).join(' ');
-  if (!value || typeof value !== 'object') return '';
-  for (const key of ['text', 'teks', 'value', 'content', 'id_ID', 'indonesia', 'arab', 'arabic', 'latin', 'arti', 'translation', 'meaning']) {
-    const text = readDuaText(value[key]);
-    if (text) return text;
-  }
-  return '';
-}
-
-function firstDuaText(...values) {
-  for (const value of values) {
-    const text = readDuaText(value);
-    if (text && !/^(?:konten|data|bacaan|terjemahan)\s+(?:tidak|belum)\s+tersedia\b/i.test(text) && !/^[-–—]+$/.test(text)) return text;
-  }
-  return '';
-}
-
-function firstArabicDuaText(...values) {
-  for (const value of values) {
-    const text = firstDuaText(value);
-    if (text && /[\u0600-\u06FF]/.test(text)) return cleanArabicText(text);
-  }
-  return '';
-}
-
-function normalizeDua(item, index) {
-  const d = item || {};
-  const text = d.text && typeof d.text === 'object' ? d.text : {};
-  const content = d.content && typeof d.content === 'object' ? d.content : {};
-  const konten = d.konten && typeof d.konten === 'object' ? d.konten : {};
-  const bacaan = d.bacaan && typeof d.bacaan === 'object' ? d.bacaan : {};
-  const arab = firstArabicDuaText(
-    d.arab, d.arabic, d.arabicText, d.arabic_text, d.arab_text, d.text_ar, d.teksArab, d.teks_arab,
-    d.teksArabic, d.textArabic, d.text_arab, d.lafaz, d.lafadz, d.lafadz_arab, d.bacaanArab,
-    d.bacaan_arab, d.doaArab, d.doa_arab, text.arab, text.arabic, content.arab,
-    content.arabic, konten.arab, konten.arabic, bacaan.arab, bacaan.arabic, d.teks, d.isi, d.konten, d.bacaan, d.doa
-  );
-  return {
-    id: d.id ?? d.nomor ?? d.no ?? d.nomorDoa ?? d.nomor_doa ?? index + 1,
-    judul: firstDuaText(d.judul, d.title, d.nama, d.name, d.title_id, d.judulDoa, d.judul_doa, d.namaDoa, d.nama_doa, d.doa_name, d.label) || `Doa ${index + 1}`,
-    arab,
-    latin: firstDuaText(
-      d.latin, d.teksLatin, d.teks_latin, d.transliterasi, d.transliteration,
-      d.latinText, d.latin_text, d.text_latin, d.transliterasi_latin, d.bacaanLatin, d.bacaan_latin, text.latin,
-      content.latin, konten.latin, bacaan.latin, d.reading
-    ),
-    terjemah: firstDuaText(
-      d.terjemah, d.arti, d.terjemahan, d.teksIndonesia, d.teks_indonesia,
-      d.teks_indo, d.text_indonesia, d.translation, d.translation_id, d.translation_text, d.text_translation, d.indonesia, d.indonesian,
-      d.makna, d.meaning, d.meaning_id, d.arti_id, d.artinya, d.text_id, d.terjemahan_id,
-      text.indonesia, text.id, text.translation, content.indonesia,
-      content.translation, konten.indonesia, konten.translation, bacaan.terjemah, d.isiTerjemahan, d.isi_terjemahan
-    ),
-    sumber: firstDuaText(d.sumber, d.referensi, d.source, d.reference, d.sumberHadis, d.sumber_hadits, d.hadits, d.hadis),
-    grup: firstDuaText(d.grup, d.kategori, d.category, d.kategoriNama, d.category_name) || 'Doa harian',
-    tags: Array.isArray(d.tags) ? d.tags : Array.isArray(d.tag) ? d.tag : []
-  };
-}
-
-function isUsableDua(dua) {
-  const validText = (value) => Boolean(value && !/^(?:konten|data|bacaan|terjemahan)\s+(?:tidak|belum)\s+tersedia\b/i.test(value.trim()) && !/^[-–—]+$/.test(value.trim()));
-  return Boolean(
-    (validText(dua?.arab) && /[\u0600-\u06FF]/.test(dua.arab)) ||
-    validText(dua?.latin) || validText(dua?.terjemah)
-  );
-}
-
-function extractDuaRows(payload) {
-  const keys = ['doa', 'doas', 'duas', 'items', 'list', 'results', 'result', 'data', 'daftar', 'dzikir', 'prayers', 'records'];
-  const visited = new Set();
-  function walk(value, depth = 0) {
-    if (!value || depth > 6 || typeof value !== 'object' || visited.has(value)) return [];
-    visited.add(value);
-    if (Array.isArray(value)) {
-      return value.some((item) => item && typeof item === 'object' && !Array.isArray(item)) ? value : [];
-    }
-    for (const key of keys) {
-      if (value[key] && typeof value[key] === 'object') {
-        const rows = walk(value[key], depth + 1);
-        if (rows.length) return rows;
-      }
-    }
-    for (const nested of Object.values(value)) {
-      if (nested && typeof nested === 'object') {
-        const rows = walk(nested, depth + 1);
-        if (rows.length) return rows;
-      }
-    }
-    return [];
-  }
-  return Array.isArray(payload) ? payload : walk(payload);
 }
 function toPrayerTimes(raw) {
   const container = raw?.jadwal ?? raw?.schedule ?? raw ?? {};
@@ -217,7 +134,7 @@ function findTafsirText(payload, verseNumber) {
   return typeof direct === 'string' ? direct : '';
 }
 
-export default function HomePage({ initialTab = 'home', initialSurahNumber = null, initialVerseNumber = null, initialVerseRows = EMPTY_INITIAL_VERSES }) {
+export default function HomePage({ initialTab = 'home', initialSurahNumber = null, initialVerseNumber = null, initialVerseRows = EMPTY_INITIAL_VERSES, initialDuaSlug = null, initialDua = null }) {
   const safeInitialTab = VALID_TABS.includes(initialTab) ? initialTab : 'home';
   const parsedInitialSurahNumber = Number(initialSurahNumber);
   const safeInitialSurahNumber = Number.isInteger(parsedInitialSurahNumber) && parsedInitialSurahNumber >= 1 && parsedInitialSurahNumber <= 114
@@ -277,9 +194,22 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
   const repeatCountRef = useRef(0);
   const pendingJumpRef = useRef(safeInitialVerseNumber || null);
 
-  const [duas, setDuas] = useState(() => enforceBeforeMealDua(fallbackDuas.map(normalizeDua)));
+  const [activeDuaSlug, setActiveDuaSlug] = useState(initialDuaSlug || null);
+  const [duas, setDuas] = useState(() => {
+    const base = enforceBeforeMealDua(fallbackDuas.map(normalizeDua));
+    if (!initialDua) return base;
+    const normalizedInitial = normalizeDua(initialDua);
+    const slug = getDuaSlug(normalizedInitial);
+    const withoutDuplicate = base.filter((row, index) => getDuaSlug(row, index) !== slug && String(row.id) !== String(normalizedInitial.id));
+    return [...withoutDuplicate, normalizedInitial];
+  });
   const [duaQuery, setDuaQuery] = useState('');
-  const [expandedDua, setExpandedDua] = useState(null);
+  const [expandedDua, setExpandedDua] = useState(initialDua?.id ?? null);
+  const activeDua = useMemo(() => {
+    if (!activeDuaSlug) return null;
+    return duas.find((dua, index) => getDuaSlug(dua, index) === activeDuaSlug)
+      || (initialDua && getDuaSlug(initialDua) === activeDuaSlug ? normalizeDua(initialDua) : null);
+  }, [activeDuaSlug, duas, initialDua]);
   const [asmaQuery, setAsmaQuery] = useState('');
   const [favoriteAsma, setFavoriteAsma] = useState([]);
 
@@ -326,8 +256,10 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
   useEffect(() => {
     setDateLabel(formatToday());
     const initialPathname = normalizePathname(window.location.pathname);
-    const tabFromPath = PATH_TABS[initialPathname] || (getSurahNumberFromPathname(initialPathname) ? 'quran' : null);
+    const initialDuaRouteSlug = getDuaSlugFromPathname(initialPathname);
+    const tabFromPath = PATH_TABS[initialPathname] || (getSurahNumberFromPathname(initialPathname) ? 'quran' : null) || (initialDuaRouteSlug ? 'duas' : null);
     if (tabFromPath) setActiveTab(tabFromPath);
+    if (initialDuaRouteSlug) setActiveDuaSlug(initialDuaRouteSlug);
     const tabFromUrl = new URLSearchParams(window.location.search).get('tab');
     if (VALID_TABS.includes(tabFromUrl)) setActiveTab(tabFromUrl);
     setOnline(navigator.onLine);
@@ -374,11 +306,13 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
       // A legacy cache containing only the before-meal prayer is incomplete. Replace it
       // with the bundled list so it cannot make the page look as if every other dua was deleted.
       if (validSavedDuas.length >= MIN_DUA_CATALOG_SIZE) {
-        setDuas(validSavedDuas);
-        writeLocal('aq:duas', validSavedDuas);
+        const withInitial = initialDua ? mergeInitialDua(validSavedDuas, initialDua) : validSavedDuas;
+        setDuas(withInitial);
+        writeLocal('aq:duas', withInitial);
       } else {
-        setDuas(fallbackRows);
-        writeLocal('aq:duas', fallbackRows);
+        const withInitial = initialDua ? mergeInitialDua(fallbackRows, initialDua) : fallbackRows;
+        setDuas(withInitial);
+        writeLocal('aq:duas', withInitial);
       }
     }
 
@@ -407,7 +341,7 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
       window.removeEventListener('beforeinstallprompt', onInstallPrompt);
       window.removeEventListener('appinstalled', onInstalled);
     };
-  }, [showToast]);
+  }, [showToast, initialDua]);
 
   // Keep each main section addressable so search engines and users can open it directly.
   // Use the native History API to preserve the single-page experience between tabs.
@@ -416,23 +350,27 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
     const currentPath = normalizePathname(window.location.pathname);
     const currentVerseNumber = getVerseNumberFromPathname(currentPath);
     const currentPathSurahNumber = getSurahNumberFromPathname(currentPath);
+    const currentPathDuaSlug = getDuaSlugFromPathname(currentPath);
     const preserveAyahRoute = activeTab === 'quran' && selectedSurah && currentVerseNumber
       && currentPathSurahNumber === Number(selectedSurah.nomor);
+    const preserveDuaRoute = activeTab === 'duas' && Boolean(activeDuaSlug) && currentPathDuaSlug === activeDuaSlug;
     const targetPath = activeTab === 'quran' && selectedSurah
       ? (preserveAyahRoute ? currentPath : getSurahPath(selectedSurah))
-      : (TAB_PATHS[activeTab] || '/');
+      : activeTab === 'duas' && activeDuaSlug
+        ? (preserveDuaRoute ? currentPath : `/doa/${activeDuaSlug}`)
+        : (TAB_PATHS[activeTab] || '/');
 
     // On first mount, let the boot effect align state with a direct route before
     // changing the URL. Detail routes are valid Quran pages, not unknown paths.
     if (!routeSyncInitializedRef.current) {
       routeSyncInitializedRef.current = true;
-      const pathTab = PATH_TABS[currentPath] || (getSurahNumberFromPathname(currentPath) ? 'quran' : null);
+      const pathTab = PATH_TABS[currentPath] || (getSurahNumberFromPathname(currentPath) ? 'quran' : null) || (currentPathDuaSlug ? 'duas' : null);
       if ((pathTab && pathTab !== activeTab) || (currentPath === '/' && VALID_TABS.includes(queryTab) && activeTab !== queryTab)) return;
     }
     if (currentPath !== targetPath || VALID_TABS.includes(queryTab)) {
       window.history.pushState(null, '', targetPath);
     }
-  }, [activeTab, selectedSurah?.nomor]);
+  }, [activeTab, selectedSurah?.nomor, activeDuaSlug]);
 
   // Keep browser tab title, descriptions and canonical metadata aligned while navigating client-side.
   useEffect(() => {
@@ -448,7 +386,14 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
           path: isCurrentAyahRoute ? getVersePath(selectedSurah, currentVerseNumber) : getSurahPath(selectedSurah),
           ayah: isCurrentAyahRoute ? currentVerseNumber : null
         }
-      : (SECTION_SEO_BY_TAB[activeTab] || SECTION_SEO_BY_TAB.home);
+      : activeTab === 'duas' && activeDuaSlug && activeDua
+        ? {
+            title: `${activeDua.judul} — Doa Harian Arab, Latin, dan Artinya`,
+            description: `Baca ${activeDua.judul} dalam bahasa Arab, bacaan Latin, dan terjemahan Indonesia. Bagikan tautan doa ini melalui Nurani.`,
+            path: getDuaPath(activeDua),
+            ayah: null
+          }
+        : (SECTION_SEO_BY_TAB[activeTab] || SECTION_SEO_BY_TAB.home);
     const displayTitle = seo.ayah ? `${seo.title} · Ayat ${seo.ayah}` : seo.title;
     const fullTitle = activeTab === 'home' ? siteName : `${displayTitle} | Nurani`;
     document.title = fullTitle;
@@ -476,7 +421,7 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
       document.head.appendChild(canonical);
     }
     canonical.setAttribute('href', `${siteUrl}${seo.path === '/' ? '/' : seo.path}`);
-  }, [activeTab, selectedSurah?.nomor]);
+  }, [activeTab, selectedSurah?.nomor, activeDuaSlug, activeDua?.judul]);
 
   useEffect(() => {
     let cancelled = false;
@@ -510,13 +455,14 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
         if (rawRows.length < MIN_DUA_CATALOG_SIZE) return;
         const rows = enforceBeforeMealDua(rawRows);
         if (!cancelled && rows.length >= MIN_DUA_CATALOG_SIZE) {
-          setDuas(rows);
-          writeLocal('aq:duas', rows);
+          const withInitial = initialDua ? mergeInitialDua(rows, initialDua) : rows;
+          setDuas(withInitial);
+          writeLocal('aq:duas', withInitial);
         }
       } catch { /* Cached or bundled prayer list remains available offline. */ }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [initialDua]);
 
   useEffect(() => {
     let cancelled = false;
@@ -688,6 +634,13 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
   useEffect(() => {
     const syncTabFromHistory = () => {
       const pathname = normalizePathname(window.location.pathname);
+      const duaSlug = getDuaSlugFromPathname(pathname);
+      if (duaSlug) {
+        setActiveTab('duas');
+        setActiveDuaSlug(duaSlug);
+        setSelectedSurah(null);
+        return;
+      }
       const surahNumber = getSurahNumberFromPathname(pathname);
       if (surahNumber) {
         setActiveTab('quran');
@@ -696,6 +649,7 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
       }
       const tab = PATH_TABS[pathname];
       if (!tab) return;
+      setActiveDuaSlug(null);
       setActiveTab(tab);
       if (tab !== 'quran' || pathname === TAB_PATHS.quran) setSelectedSurah(null);
     };
@@ -837,6 +791,39 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
       if (error?.name !== 'AbortError') showToast('Ayat belum bisa dibagikan. Coba salin teks ayat terlebih dahulu.');
     }
   };
+  const shareDua = async (dua) => {
+    if (!dua) return;
+    const path = getDuaPath(dua);
+    const url = new URL(path, window.location.origin).toString();
+    const sourceLine = dua.sumber ? `Sumber: ${dua.sumber}` : '';
+    const text = [dua.judul, dua.arab, dua.latin, dua.terjemah, sourceLine].filter(Boolean).join('\n\n');
+    try {
+      if (typeof navigator.share === 'function') {
+        await navigator.share({ title: `${dua.judul} — Nurani`, text, url });
+        return;
+      }
+      const shareText = `${text}\n\nBaca doa ini di Nurani: ${url}`;
+      if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(shareText);
+      else {
+        const field = document.createElement('textarea');
+        field.value = shareText; field.setAttribute('readonly', '');
+        field.style.position = 'fixed'; field.style.opacity = '0';
+        document.body.appendChild(field); field.select();
+        const copied = document.execCommand('copy'); field.remove();
+        if (!copied) throw new Error('Copy command failed');
+      }
+      showToast('Doa dan tautannya berhasil disalin.');
+    } catch (error) {
+      if (error?.name !== 'AbortError') showToast('Doa belum bisa dibagikan. Coba salin teks doa terlebih dahulu.');
+    }
+  };
+  const copyDua = async (dua) => {
+    try {
+      await navigator.clipboard.writeText([dua.judul, dua.arab, dua.latin, dua.terjemah, dua.sumber].filter(Boolean).join('\n\n'));
+      showToast('Doa berhasil disalin.');
+    } catch { showToast('Clipboard tidak tersedia.'); }
+  };
+
   const openTafsir = async (verse = null) => {
     if (!selectedSurah) return;
     setTafsirLoading(true);
@@ -1108,12 +1095,31 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
       <div className="quran-search search-box"><Search size={18} /><input value={duaQuery} onChange={(event) => setDuaQuery(event.target.value)} placeholder="Cari doa atau aktivitas…" aria-label="Cari doa" />{duaQuery && <button aria-label="Hapus pencarian doa" onClick={() => setDuaQuery('')}><X size={16} /></button>}</div>
       <div className="results-caption"><span>{filteredDuas.length} doa tersedia</span><span><BookOpen size={14} /> Arab · Latin · Arti</span></div>
       <div className="duas-list">
-        {filteredDuas.map((dua, index) => <article className={`dua-card card-surface ${expandedDua === dua.id ? 'expanded' : ''}`} key={`${dua.id}-${index}`}><button className="dua-card-trigger" onClick={() => setExpandedDua((current) => current === dua.id ? null : dua.id)}><span className="dua-number">{String(index + 1).padStart(2, '0')}</span><span className="dua-heading-copy"><strong>{dua.judul}</strong><small>{dua.grup}</small></span><span className="dua-expand-icon">{expandedDua === dua.id ? <Minus size={17} /> : <Plus size={17} />}</span></button><div className="dua-preview"><p className="dua-arabic" dir="rtl" lang="ar">{dua.arab || '—'}</p><p className="dua-translation">{dua.terjemah || 'Terjemahan belum tersedia.'}</p></div>{expandedDua === dua.id && <div className="dua-expanded"><div className="dua-divider" /><span className="field-label">BACAAN LATIN</span><p className="dua-latin">{dua.latin || 'Transliterasi belum tersedia.'}</p><span className="field-label">ARTI / TERJEMAHAN</span><p>{dua.terjemah || 'Terjemahan belum tersedia.'}</p>{dua.sumber && <div className="dua-source"><ShieldCheck size={14} /> {dua.sumber}</div>}<button className="text-link" onClick={async () => { try { await navigator.clipboard.writeText([dua.judul,dua.arab,dua.latin,dua.terjemah,dua.sumber].filter(Boolean).join('\n\n')); showToast('Doa berhasil disalin.'); } catch { showToast('Clipboard tidak tersedia.'); } }}><Copy size={14} /> Salin doa</button></div>}</article>)}
+        {filteredDuas.map((dua, index) => <article className={`dua-card card-surface ${expandedDua === dua.id ? 'expanded' : ''}`} key={`${dua.id}-${index}`}><button className="dua-card-trigger" onClick={() => setExpandedDua((current) => current === dua.id ? null : dua.id)}><span className="dua-number">{String(index + 1).padStart(2, '0')}</span><span className="dua-heading-copy"><strong>{dua.judul}</strong><small>{dua.grup}</small></span><span className="dua-expand-icon">{expandedDua === dua.id ? <Minus size={17} /> : <Plus size={17} />}</span></button><div className="dua-preview"><p className="dua-arabic" dir="rtl" lang="ar">{dua.arab || '—'}</p><p className="dua-translation">{dua.terjemah || 'Terjemahan belum tersedia.'}</p><div className="dua-card-actions"><button className="text-link" onClick={() => shareDua(dua)}><Share2 size={14} /> Bagikan doa</button><Link className="text-link" href={getDuaPath(dua, index)} onClick={(event) => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return; event.preventDefault(); const slug = getDuaSlug(dua, index); setActiveDuaSlug(slug); setExpandedDua(dua.id); window.history.pushState(null, '', getDuaPath(dua, index)); }}><ArrowRight size={14} /> Buka doa</Link></div></div>{expandedDua === dua.id && <div className="dua-expanded"><div className="dua-divider" /><span className="field-label">BACAAN LATIN</span><p className="dua-latin">{dua.latin || 'Transliterasi belum tersedia.'}</p><span className="field-label">ARTI / TERJEMAHAN</span><p>{dua.terjemah || 'Terjemahan belum tersedia.'}</p>{dua.sumber && <div className="dua-source"><ShieldCheck size={14} /> {dua.sumber}</div>}<button className="text-link" onClick={() => copyDua(dua)}><Copy size={14} /> Salin doa</button></div>}</article>)}
       </div>
       {!filteredDuas.length && <div className="empty-state card-surface"><div className="empty-icon"><Search size={22} /></div><strong>Doa tidak ditemukan</strong><p>Coba kata pencarian yang lebih umum.</p><button className="button button-secondary" onClick={() => setDuaQuery('')}>Hapus pencarian</button></div>}
       <p className="source-note"><Info size={15} /> Daftar doa diambil dari EQuran.id. Saat offline, aplikasi menampilkan doa cadangan yang tersedia di perangkat.</p>
     </div>
   );
+
+  const renderDuaDetail = () => {
+    if (!activeDua) return <div className="page-stack duas-page"><div className="empty-state card-surface"><strong>Doa tidak ditemukan</strong><p>Daftar doa mungkin belum berhasil dimuat.</p><Link className="button button-secondary" href="/doa">Kembali ke semua doa</Link></div></div>;
+    return (
+      <div className="page-stack duas-page dua-detail-page">
+        <section className="page-title-row"><div><p className="eyebrow">DOA HARIAN · {activeDua.grup || 'DOA SEHARI-HARI'}</p><h1>{activeDua.judul}</h1><p className="muted">Bacaan Arab, Latin, dan terjemahan Indonesia.</p></div><div className="page-title-icon dua-title-icon"><HandHeart size={24} /></div></section>
+        <article className="dua-detail-card card-surface">
+          <p className="dua-detail-arabic dua-arabic" dir="rtl" lang="ar">{activeDua.arab || '—'}</p>
+          <div className="dua-divider" />
+          <span className="field-label">BACAAN LATIN</span><p className="dua-latin">{activeDua.latin || 'Transliterasi belum tersedia.'}</p>
+          <span className="field-label">ARTI / TERJEMAHAN</span><p className="dua-detail-translation">{activeDua.terjemah || 'Terjemahan belum tersedia.'}</p>
+          {activeDua.sumber && <div className="dua-source"><ShieldCheck size={14} /> {activeDua.sumber}</div>}
+          <div className="dua-detail-actions"><button className="button button-secondary" onClick={() => copyDua(activeDua)}><Copy size={15} /> Salin doa</button><button className="button button-gold" onClick={() => shareDua(activeDua)}><Share2 size={15} /> Bagikan doa</button></div>
+        </article>
+        <Link className="text-link dua-back-link" href="/doa"><ChevronLeft size={15} /> Kembali ke kumpulan doa</Link>
+        <p className="source-note"><Info size={15} /> Tautan ini mengarah langsung ke doa yang Anda pilih dan dapat dibagikan kepada orang lain.</p>
+      </div>
+    );
+  };
 
   const renderAsma = () => (
     <div className="page-stack asma-page">
@@ -1129,7 +1135,7 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
   return (
     <div className={`app-shell ${theme === 'dark' ? 'theme-dark' : ''} ${audioInfo ? 'has-audio-global' : ''}`}>
       <header className="app-header">
-        <button className="brand-lockup" onClick={() => { setActiveTab('home'); setSelectedSurah(null); }} aria-label="Kembali ke beranda"><span className="brand-mark"><span className="brand-arch" /><span className="brand-dot" /></span><span className="brand-text"><strong>Nur<span>ani</span></strong><small>AL-QUR’AN DIGITAL</small></span></button>
+        <button className="brand-lockup" onClick={() => { setActiveDuaSlug(null); setActiveTab('home'); setSelectedSurah(null); }} aria-label="Kembali ke beranda"><span className="brand-mark"><span className="brand-arch" /><span className="brand-dot" /></span><span className="brand-text"><strong>Nur<span>ani</span></strong><small>AL-QUR’AN DIGITAL</small></span></button>
         <div className="header-actions"><span className={`connection-indicator ${online ? 'online' : 'offline'}`} title={online ? 'Terhubung ke internet' : 'Sedang offline'}>{online ? <Wifi size={15} /> : <WifiOff size={15} />}</span><button className="icon-button" onClick={() => setTheme((value) => value === 'light' ? 'dark' : 'light')} aria-label={theme === 'light' ? 'Aktifkan tema gelap' : 'Aktifkan tema terang'}>{theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}</button><button className="icon-button settings-trigger" onClick={() => setSettingsOpen(true)} aria-label="Buka pengaturan"><Settings2 size={17} /></button><button className="install-button" onClick={installApp} aria-label="Pasang aplikasi">{installed ? <Check size={16} /> : <Download size={16} />}<span>{installed ? 'Terpasang' : 'Pasang app'}</span></button></div>
       </header>
 
@@ -1137,7 +1143,7 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
         {activeTab === 'home' && renderHome()}
         {activeTab === 'quran' && (selectedSurah ? renderReader() : renderSurahList())}
         {activeTab === 'prayer' && renderPrayer()}
-        {activeTab === 'duas' && renderDuas()}
+        {activeTab === 'duas' && (activeDuaSlug ? renderDuaDetail() : renderDuas())}
         {activeTab === 'asma' && renderAsma()}
       </main>
 
@@ -1152,7 +1158,7 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
         <div className="audio-track-art"><AudioLines size={19} /></div><div className="audio-track-info"><strong>{audioInfo.title}</strong><span>{audioInfo.subtitle}</span></div><button className="icon-button audio-dismiss" aria-label="Tutup pemutar" onClick={() => { audioRef.current?.pause(); setAudioInfo(null); setAudioPlaying(false); }}><X size={17} /></button><button className="audio-play-button" aria-label={audioPlaying ? 'Jeda audio' : 'Putar audio'} onClick={toggleAudioPlayback}>{audioPlaying ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" />}</button><button className="icon-button audio-more" aria-label="Besarkan pemutar" onClick={() => setAudioExpanded((value) => !value)}>{audioExpanded ? <ChevronDown size={17} /> : <MoreHorizontal size={17} />}</button>
       </div>}
 
-      <nav className="bottom-nav" aria-label="Navigasi utama">{NAV_ITEMS.map((item) => { const Icon = item.icon; const isActive = activeTab === item.id; return <a key={item.id} href={TAB_PATHS[item.id]} className={`nav-item ${isActive ? 'active' : ''}`} onClick={(event) => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return; event.preventDefault(); setActiveTab(item.id); if (item.id !== 'quran') setSelectedSurah(null); }} aria-current={isActive ? 'page' : undefined}><span className="nav-icon-wrap"><Icon size={20} strokeWidth={isActive ? 2.4 : 1.8} /></span><span>{item.label}</span></a>; })}</nav>
+      <nav className="bottom-nav" aria-label="Navigasi utama">{NAV_ITEMS.map((item) => { const Icon = item.icon; const isActive = activeTab === item.id; return <a key={item.id} href={TAB_PATHS[item.id]} className={`nav-item ${isActive ? 'active' : ''}`} onClick={(event) => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return; event.preventDefault(); setActiveDuaSlug(null); setActiveTab(item.id); if (item.id !== 'quran') setSelectedSurah(null); }} aria-current={isActive ? 'page' : undefined}><span className="nav-icon-wrap"><Icon size={20} strokeWidth={isActive ? 2.4 : 1.8} /></span><span>{item.label}</span></a>; })}</nav>
 
       {settingsOpen && <div className="modal-backdrop" onClick={() => setSettingsOpen(false)}><section className="modal-card settings-modal" onClick={(event) => event.stopPropagation()}><div className="modal-header"><div><p className="eyebrow">PENGATURAN</p><h2>Preferensi aplikasi</h2></div><button className="icon-button" onClick={() => setSettingsOpen(false)} aria-label="Tutup pengaturan"><X size={19} /></button></div><button className="settings-row" onClick={() => setTheme((value) => value === 'light' ? 'dark' : 'light')}><span className="settings-row-icon">{theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}</span><span><strong>Tampilan</strong><small>{theme === 'light' ? 'Mode terang' : 'Mode gelap'}</small></span><ChevronRight size={17} /></button><button className="settings-row" onClick={installApp}><span className="settings-row-icon"><Download size={18} /></span><span><strong>Pasang aplikasi</strong><small>Tambahkan Nurani ke layar utama</small></span><ChevronRight size={17} /></button><div className="settings-note"><ShieldCheck size={16} /><span>Preferensi, riwayat bacaan, dan bookmark disimpan secara lokal di perangkat ini. Tidak perlu membuat akun.</span></div></section></div>}
 
