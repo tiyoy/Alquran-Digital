@@ -3,11 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
-  ArrowRight, AudioLines, BellRing, Bookmark, BookMarked, BookOpen, CalendarDays, Check, Compass, Flame, TrendingUp,
+  ArrowRight, AudioLines, BellRing, Bookmark, BookmarkPlus, BookMarked, BookOpen, CalendarDays, Check, Compass, Flame, TrendingUp,
   ChevronDown, ChevronLeft, ChevronRight, Clock3, Copy, Download, HandHeart,
   Headphones, Heart, Home, Info, ListFilter, LoaderCircle, MapPin, Minus, Moon, Gauge,
   MoreHorizontal, Pause, Play, Plus, RefreshCw, Search, Settings2, ShieldCheck,
-  Share2, SlidersHorizontal, Sparkles, Sun, Wifi, WifiOff, X, Repeat, Target, StickyNote, PencilLine, Trash2, Upload, Palette
+  Share2, SlidersHorizontal, Sparkles, Sun, Wifi, WifiOff, X, Repeat, Target, StickyNote, PencilLine, Trash2, Upload, Palette, Folder, FolderPlus, FolderOpen
 } from 'lucide-react';
 import { asmaulHusna, enforceBeforeMealDua, fallbackDuas, fallbackSurahs, MIN_DUA_CATALOG_SIZE } from '@/lib/data';
 import { extractDuaRows, isUsableDua, normalizeDua } from '@/lib/duas';
@@ -16,6 +16,7 @@ import { DAILY_VERSE_GOAL_OPTIONS, DEFAULT_DAILY_VERSE_GOAL, getTilawahStats, no
 import { getDuaPath, getDuaSlug, getDuaSlugFromPathname } from '@/lib/dua-routes';
 import { PATH_TABS, SECTION_SEO_BY_TAB, TAB_PATHS, VALID_TABS } from '@/lib/section-routes';
 import { getSurahNumberFromPathname, getSurahPath, getVerseNumberFromPathname, getVersePath } from '@/lib/surah-routes';
+import { COLLECTION_DESCRIPTION_MAX_LENGTH, COLLECTION_NAME_MAX_LENGTH, MAX_VERSE_COLLECTIONS, VERSE_COLLECTION_COLORS, VERSE_COLLECTIONS_STORAGE_KEY, createVerseCollectionId, normalizeVerseCollections, toggleVerseKeyInCollection } from '@/lib/verse-collections';
 import { siteName, siteUrl } from '@/lib/site-config';
 import {
   LOCAL_BACKUP_LABELS, LOCAL_BACKUP_MAX_BYTES,
@@ -49,6 +50,7 @@ const NAV_ITEMS = [
   { id: 'home', label: 'Beranda', icon: Home },
   { id: 'quran', label: 'Al-Qur’an', icon: BookOpen },
   { id: 'search', label: 'Cari', icon: Search },
+  { id: 'collections', label: 'Koleksi', icon: Folder },
   { id: 'prayer', label: 'Shalat', icon: Clock3 },
   { id: 'duas', label: 'Doa', icon: HandHeart },
   { id: 'asma', label: 'Asmaul', icon: Sparkles }
@@ -265,6 +267,15 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
   const [qariIndex, setQariIndex] = useState(0);
   const [bookmarkedSurahs, setBookmarkedSurahs] = useState([]);
   const [bookmarkedVerses, setBookmarkedVerses] = useState([]);
+  const [verseCollections, setVerseCollections] = useState([]);
+  const [verseCollectionsLoaded, setVerseCollectionsLoaded] = useState(false);
+  const [selectedCollectionId, setSelectedCollectionId] = useState(null);
+  const [collectionSearch, setCollectionSearch] = useState('');
+  const [collectionEditorOpen, setCollectionEditorOpen] = useState(false);
+  const [editingCollectionId, setEditingCollectionId] = useState(null);
+  const [collectionDraft, setCollectionDraft] = useState({ name: '', description: '', color: 'emerald' });
+  const [collectionVerseTarget, setCollectionVerseTarget] = useState(null);
+  const [bookmarkCollectionTargetId, setBookmarkCollectionTargetId] = useState(null);
   const [verseNotes, setVerseNotes] = useState({});
   const [editingVerseNote, setEditingVerseNote] = useState(null);
   const [verseNoteDraft, setVerseNoteDraft] = useState('');
@@ -406,6 +417,8 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
     setTheme(readLocal('aq:theme', 'light'));
     setBookmarkedSurahs(readLocal('aq:bookmarked-surahs', []));
     setBookmarkedVerses(readLocal('aq:bookmarked-verses', []));
+    setVerseCollections(normalizeVerseCollections(readLocal(VERSE_COLLECTIONS_STORAGE_KEY, [])));
+    setVerseCollectionsLoaded(true);
     setVerseNotes(normalizeVerseNotes(readLocal('aq:verse-notes', {})));
     setLastRead(readLocal('aq:last-read', null));
     const savedReadVerseKeys = readLocal('aq:read-verse-keys', []);
@@ -713,6 +726,9 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
   useEffect(() => {
     writeLocal('aq:bookmarked-verses', bookmarkedVerses);
   }, [bookmarkedVerses]);
+  useEffect(() => {
+    if (verseCollectionsLoaded) writeLocal(VERSE_COLLECTIONS_STORAGE_KEY, verseCollections);
+  }, [verseCollections, verseCollectionsLoaded]);
   useEffect(() => {
     writeLocal('aq:verse-notes', verseNotes);
   }, [verseNotes]);
@@ -1068,6 +1084,106 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
     setBookmarkedVerses((previous) => previous.includes(key) ? previous.filter((id) => id !== key) : [...previous, key]);
     showToast(bookmarkedVerses.includes(key) ? 'Bookmark ayat dihapus.' : 'Ayat disimpan ke bookmark.');
   };
+
+  const openVerseCollectionPicker = (surahNumber, verseNumber, surahName = '') => {
+    const surahId = Number(surahNumber);
+    const ayah = Number(verseNumber);
+    const surah = surahs.find((item) => Number(item.nomor) === surahId) || fallbackSurahs[surahId - 1];
+    if (!Number.isInteger(surahId) || surahId < 1 || surahId > 114 || !Number.isInteger(ayah) || ayah < 1 || ayah > Number(surah?.jumlahAyat || 0)) {
+      showToast('Referensi ayat tidak valid untuk dimasukkan ke koleksi.');
+      return;
+    }
+    setCollectionVerseTarget({ surahNumber: surahId, verseNumber: ayah, surahName: surahName || surah?.namaLatin || `Surah ${surahId}` });
+  };
+
+  const startCreateCollection = () => {
+    setEditingCollectionId(null);
+    setCollectionDraft({ name: '', description: '', color: 'emerald' });
+    setCollectionEditorOpen(true);
+  };
+
+  const startEditCollection = (collection) => {
+    if (!collection) return;
+    setEditingCollectionId(collection.id);
+    setCollectionDraft({ name: collection.name, description: collection.description || '', color: collection.color || 'emerald' });
+    setCollectionEditorOpen(true);
+  };
+
+  const saveVerseCollection = (event) => {
+    event?.preventDefault?.();
+    const name = String(collectionDraft.name || '').trim().slice(0, COLLECTION_NAME_MAX_LENGTH);
+    const description = String(collectionDraft.description || '').trim().slice(0, COLLECTION_DESCRIPTION_MAX_LENGTH);
+    const color = VERSE_COLLECTION_COLORS.some((item) => item.value === collectionDraft.color) ? collectionDraft.color : 'emerald';
+    if (!name) { showToast('Masukkan nama koleksi terlebih dahulu.'); return; }
+    const now = Date.now();
+    if (editingCollectionId) {
+      setVerseCollections((current) => normalizeVerseCollections(current.map((collection) => collection.id === editingCollectionId
+        ? { ...collection, name, description, color, updatedAt: now }
+        : collection)));
+      showToast('Koleksi berhasil diperbarui.');
+    } else {
+      if (verseCollections.length >= MAX_VERSE_COLLECTIONS) { showToast(`Maksimal ${MAX_VERSE_COLLECTIONS} koleksi pada satu perangkat.`); return; }
+      const verseKeys = collectionVerseTarget ? [`${collectionVerseTarget.surahNumber}:${collectionVerseTarget.verseNumber}`] : [];
+      const created = { id: createVerseCollectionId(), name, description, color, verseKeys, createdAt: now, updatedAt: now };
+      setVerseCollections((current) => normalizeVerseCollections([...current, created]));
+      setSelectedCollectionId(created.id);
+      showToast(collectionVerseTarget ? 'Koleksi dibuat dan ayat ditambahkan.' : 'Koleksi baru berhasil dibuat.');
+      if (collectionVerseTarget) setCollectionVerseTarget(null);
+    }
+    setCollectionEditorOpen(false);
+    setEditingCollectionId(null);
+    setCollectionDraft({ name: '', description: '', color: 'emerald' });
+  };
+
+  const deleteVerseCollection = (collection) => {
+    if (!collection || !window.confirm(`Hapus koleksi “${collection.name}”? Ayat dan bookmark asli tidak akan dihapus dari Nurani.`)) return;
+    setVerseCollections((current) => current.filter((item) => item.id !== collection.id));
+    if (selectedCollectionId === collection.id) setSelectedCollectionId(null);
+    showToast('Koleksi dihapus. Bookmark asli dan catatan tadabbur tetap aman.');
+  };
+
+  const toggleCollectionVerse = (collectionId, verseKey) => {
+    const collection = verseCollections.find((item) => item.id === collectionId);
+    if (!collection) return;
+    const exists = collection.verseKeys.includes(verseKey);
+    if (!exists && collection.verseKeys.length >= 6236) { showToast('Koleksi ini sudah mencapai batas ayat.'); return; }
+    setVerseCollections((current) => normalizeVerseCollections(current.map((item) => item.id === collectionId
+      ? toggleVerseKeyInCollection(item, verseKey, Date.now())
+      : item)));
+    showToast(exists ? 'Ayat dikeluarkan dari koleksi.' : 'Ayat ditambahkan ke koleksi.');
+  };
+
+  const removeVerseFromCollection = (collectionId, verseKey) => {
+    setVerseCollections((current) => normalizeVerseCollections(current.map((item) => item.id === collectionId
+      ? { ...item, verseKeys: item.verseKeys.filter((key) => key !== verseKey), updatedAt: Date.now() }
+      : item)));
+    showToast('Ayat dikeluarkan dari koleksi. Bookmark umum tidak berubah.');
+  };
+
+  const openVerseFromCollection = (verseKey) => {
+    const [surahId, verseNumber] = String(verseKey).split(':').map(Number);
+    if (!Number.isInteger(surahId) || !Number.isInteger(verseNumber)) return;
+    void openSurah(surahId, verseNumber);
+  };
+
+  const shareVerseCollection = async (collection) => {
+    if (!collection) return;
+    const references = collection.verseKeys.slice(0, 30).map((key) => {
+      const [surahId, verseNumber] = key.split(':').map(Number);
+      const surah = surahs.find((item) => Number(item.nomor) === surahId) || fallbackSurahs[surahId - 1];
+      return `${surah?.namaLatin || `Surah ${surahId}`} ${surahId}:${verseNumber}\n${new URL(getVersePath(surahId, verseNumber), window.location.origin).toString()}`;
+    });
+    const remaining = collection.verseKeys.length - references.length;
+    const text = [`Koleksi ayat: ${collection.name}`, collection.description, `${collection.verseKeys.length} ayat`, ...references, remaining > 0 ? `… dan ${remaining} ayat lainnya.` : '', 'Dibagikan dari Nurani — Al-Qur’an Digital Indonesia.'].filter(Boolean).join('\n\n');
+    try {
+      if (typeof navigator.share === 'function') { await navigator.share({ title: `${collection.name} — Nurani`, text }); return; }
+      await navigator.clipboard.writeText(text);
+      showToast('Daftar ayat koleksi disalin untuk dibagikan.');
+    } catch (error) {
+      if (error?.name !== 'AbortError') showToast('Koleksi belum dapat dibagikan dari browser ini.');
+    }
+  };
+
   const openVerseNoteEditor = (surah, verse) => {
     const surahId = Number(surah?.nomor);
     const verseNumber = Number(verse?.nomorAyat);
@@ -1884,7 +2000,7 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
   };
   const exportLocalBackup = () => {
     try {
-      const backup = createLocalBackup(window.localStorage, '1.20.0');
+      const backup = createLocalBackup(window.localStorage, '1.21.0');
       const entryCount = Object.keys(backup.data).length;
       if (!entryCount) {
         showToast('Belum ada data Nurani yang bisa dicadangkan.');
@@ -2228,7 +2344,7 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
             const bookmarkKey = `${result.surahNumber}:${result.verseNumber}`;
             const isBookmarked = bookmarkedVerses.includes(bookmarkKey);
             return <article className="quran-search-result card-surface" key={result.key}>
-              <div className="quran-search-result-top"><span className="quran-search-result-number">{result.surahNumber}:{result.verseNumber}</span><div className="quran-search-result-reference"><strong>{result.surahName}</strong><span>{result.surahArabicName}</span></div><button type="button" className={`icon-button small ${isBookmarked ? 'is-saved' : ''}`} aria-label={isBookmarked ? 'Hapus bookmark ayat' : 'Simpan bookmark ayat'} title={isBookmarked ? 'Hapus bookmark' : 'Simpan bookmark'} onClick={() => toggleVerseBookmark(result.verseNumber, result.surahNumber)}><Bookmark size={15} fill={isBookmarked ? 'currentColor' : 'none'} /></button></div>
+              <div className="quran-search-result-top"><span className="quran-search-result-number">{result.surahNumber}:{result.verseNumber}</span><div className="quran-search-result-reference"><strong>{result.surahName}</strong><span>{result.surahArabicName}</span></div><button type="button" className={`icon-button small ${isBookmarked ? 'is-saved' : ''}`} aria-label={isBookmarked ? 'Hapus bookmark ayat' : 'Simpan bookmark ayat'} title={isBookmarked ? 'Hapus bookmark' : 'Simpan bookmark'} onClick={() => toggleVerseBookmark(result.verseNumber, result.surahNumber)}><Bookmark size={15} fill={isBookmarked ? 'currentColor' : 'none'} /></button><button type="button" className="icon-button small" aria-label={`Simpan ${result.surahName} ayat ${result.verseNumber} ke koleksi`} title="Simpan ke koleksi" onClick={() => openVerseCollectionPicker(result.surahNumber, result.verseNumber, result.surahName)}><FolderPlus size={15} /></button></div>
               <div className="quran-search-match-list">{result.matches.map((match) => <div className={`quran-search-match quran-search-match-${match.field}`} key={`${result.key}:${match.field}`}><span>{QURAN_SEARCH_FIELD_LABELS[match.field] || match.label}</span><p dir={match.field === 'arabic' ? 'rtl' : 'auto'} lang={match.field === 'arabic' ? 'ar' : 'id'}>{match.text}</p></div>)}</div>
               <div className="quran-search-result-actions"><button type="button" className="button button-gold" onClick={() => void openSurah(result.surahNumber, result.verseNumber)}><BookOpen size={15} /> Buka ayat <ArrowRight size={14} /></button><button type="button" className="button button-secondary" onClick={() => void shareSearchResult(result)}><Share2 size={15} /> Bagikan</button></div>
             </article>;
@@ -2357,7 +2473,7 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
           const isSharedVerseTarget = Number(selectedSurah?.nomor) === safeInitialSurahNumber
             && Number(sharedVerseTarget) === Number(verse.nomorAyat);
           return <article id={`verse-${selectedSurah?.nomor}-${verse.nomorAyat}`} className={`verse-card card-surface ${isPlayingVerse ? 'is-playing' : ''} ${isSharedVerseTarget ? 'is-shared-target' : ''}`} key={`${selectedSurah?.nomor}-${verse.nomorAyat}`}>
-            <div className="verse-card-top"><div className="verse-number"><span>{verse.nomorAyat}</span></div><div className="verse-meta"><span>{selectedSurah?.namaLatin} · Ayat {verse.nomorAyat}</span>{isPlayingVerse && <span className="now-playing"><AudioLines size={13} /> Sedang diputar</span>}</div><div className="verse-quick-actions"><button className="icon-button small" aria-label="Putar ayat" title="Putar ayat" onClick={() => void playVerse(verse, index)}>{isPlayingVerse && audioPlaying ? <AudioLines size={16} /> : <Play size={16} />}</button><button className={`icon-button small ${bookmarkedVerses.includes(verseKey) ? 'is-saved' : ''}`} aria-label="Bookmark ayat" onClick={() => toggleVerseBookmark(verse.nomorAyat)}><Bookmark size={16} fill={bookmarkedVerses.includes(verseKey) ? 'currentColor' : 'none'} /></button><button className="icon-button small" aria-label="Salin teks ayat" title="Salin teks ayat" onClick={() => copyVerse(verse)}><Copy size={15} /></button><button className={`icon-button small ${verseNotes[verseKey] ? 'has-verse-note' : ''}`} aria-label={verseNotes[verseKey] ? "Edit catatan tadabbur" : "Tambah catatan tadabbur"} title={verseNotes[verseKey] ? "Edit catatan tadabbur" : "Tambah catatan tadabbur"} onClick={() => openVerseNoteEditor(selectedSurah, verse)}><PencilLine size={15} /></button><button className="icon-button small" aria-label="Bagikan ayat" title="Bagikan ayat" onClick={() => shareVerse(verse)}><Share2 size={15} /></button><button className="icon-button small tafsir-action" aria-label="Buka tafsir ayat" title="Buka tafsir ayat" onClick={() => openTafsir(verse)}><MoreHorizontal size={17} /></button></div></div>
+            <div className="verse-card-top"><div className="verse-number"><span>{verse.nomorAyat}</span></div><div className="verse-meta"><span>{selectedSurah?.namaLatin} · Ayat {verse.nomorAyat}</span>{isPlayingVerse && <span className="now-playing"><AudioLines size={13} /> Sedang diputar</span>}</div><div className="verse-quick-actions"><button className="icon-button small" aria-label="Putar ayat" title="Putar ayat" onClick={() => void playVerse(verse, index)}>{isPlayingVerse && audioPlaying ? <AudioLines size={16} /> : <Play size={16} />}</button><button className={`icon-button small ${bookmarkedVerses.includes(verseKey) ? 'is-saved' : ''}`} aria-label="Bookmark ayat" onClick={() => toggleVerseBookmark(verse.nomorAyat)}><Bookmark size={16} fill={bookmarkedVerses.includes(verseKey) ? 'currentColor' : 'none'} /></button><button className="icon-button small" aria-label={`Simpan ${selectedSurah?.namaLatin} ayat ${verse.nomorAyat} ke koleksi`} title="Simpan ke koleksi" onClick={() => openVerseCollectionPicker(Number(selectedSurah?.nomor), Number(verse.nomorAyat), selectedSurah?.namaLatin)}><FolderPlus size={15} /></button><button className="icon-button small" aria-label="Salin teks ayat" title="Salin teks ayat" onClick={() => copyVerse(verse)}><Copy size={15} /></button><button className={`icon-button small ${verseNotes[verseKey] ? 'has-verse-note' : ''}`} aria-label={verseNotes[verseKey] ? "Edit catatan tadabbur" : "Tambah catatan tadabbur"} title={verseNotes[verseKey] ? "Edit catatan tadabbur" : "Tambah catatan tadabbur"} onClick={() => openVerseNoteEditor(selectedSurah, verse)}><PencilLine size={15} /></button><button className="icon-button small" aria-label="Bagikan ayat" title="Bagikan ayat" onClick={() => shareVerse(verse)}><Share2 size={15} /></button><button className="icon-button small tafsir-action" aria-label="Buka tafsir ayat" title="Buka tafsir ayat" onClick={() => openTafsir(verse)}><MoreHorizontal size={17} /></button></div></div>
             {arabicVisible && <p className={`verse-arabic ${tajweedEnabled && tajweedVerseText ? 'has-tajweed-colors' : ''}`} dir="rtl" lang="ar" style={{ fontSize: `${arabicSize}px` }}>{tajweedEnabled && tajweedVerseText ? <TajweedArabicText
               text={tajweedVerseText}
               interactive={tajweedLearningMode}
@@ -2401,6 +2517,52 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
       {verses.length > 0 && <div className="reader-end-note"><Sparkles size={17} /><span>Semoga Allah memudahkan tilawah dan pemahamanmu.</span><button className="button button-secondary" onClick={() => { const next = Number(selectedSurah?.nomor) + 1; if (next <= 114) openSurah(next, 1); else showToast('Kamu telah sampai di akhir mushaf.'); }}>Surah berikutnya <ArrowRight size={15} /></button></div>}
     </div>
   );
+
+  const renderCollections = () => {
+    const activeCollection = verseCollections.find((collection) => collection.id === selectedCollectionId) || null;
+    const filteredCollections = verseCollections.filter((collection) => {
+      const query = collectionSearch.trim().toLocaleLowerCase('id-ID');
+      return !query || collection.name.toLocaleLowerCase('id-ID').includes(query) || collection.description.toLocaleLowerCase('id-ID').includes(query);
+    });
+    const getVerseRow = (key) => {
+      const [surahId, verseNumber] = String(key).split(':').map(Number);
+      const surah = surahs.find((item) => Number(item.nomor) === surahId) || fallbackSurahs[surahId - 1];
+      return { key, surahId, verseNumber, surahName: surah?.namaLatin || `Surah ${surahId}`, surahArabic: surah?.nama || '' };
+    };
+    return (
+      <div className="page-stack verse-collections-page">
+        <section className="page-title-row verse-collections-title-row">
+          <div><p className="eyebrow">SIMPAN DAN KELOMPOKKAN AYAT</p><h1>{activeCollection ? activeCollection.name : 'Koleksi Ayat'}</h1><p className="muted">Buat folder bertema untuk ayat pilihan, bahan kajian, dan catatan tadabbur.</p></div>
+          <div className="page-title-icon verse-collections-title-icon"><FolderOpen size={24} /></div>
+        </section>
+        {activeCollection ? (
+          <>
+            <div className="verse-collection-detail-toolbar"><button type="button" className="back-button" onClick={() => setSelectedCollectionId(null)}><ChevronLeft size={17} /> Semua koleksi</button><div className="verse-collection-toolbar-actions"><button type="button" className="icon-button small" title="Bagikan daftar ayat" aria-label="Bagikan koleksi" onClick={() => void shareVerseCollection(activeCollection)}><Share2 size={15} /></button><button type="button" className="icon-button small" title="Ubah koleksi" aria-label="Ubah koleksi" onClick={() => startEditCollection(activeCollection)}><PencilLine size={15} /></button><button type="button" className="icon-button small collection-delete-action" title="Hapus koleksi" aria-label="Hapus koleksi" onClick={() => deleteVerseCollection(activeCollection)}><Trash2 size={15} /></button></div></div>
+            <section className={`verse-collection-hero card-surface collection-color-${activeCollection.color}`}>
+              <span className="verse-collection-color-mark" aria-hidden="true"><FolderOpen size={22} /></span><div className="verse-collection-hero-copy"><p className="eyebrow">FOLDER AYAT</p><h2>{activeCollection.name}</h2><p>{activeCollection.description || 'Belum ada catatan koleksi. Tambahkan deskripsi melalui tombol ubah koleksi.'}</p><small>{activeCollection.verseKeys.length} ayat tersimpan · Diurutkan sesuai urutan penambahan</small></div>
+            </section>
+            <div className="verse-collection-actions-row"><button type="button" className="button button-secondary" onClick={() => setBookmarkCollectionTargetId(activeCollection.id)}><BookmarkPlus size={15} /> Tambah dari bookmark ({bookmarkedVerses.length})</button><button type="button" className="button button-gold" onClick={() => { setCollectionVerseTarget(null); setActiveTab('quran'); setSelectedSurah(null); showToast('Buka surah, lalu tekan ikon folder pada ayat untuk menambahkannya ke koleksi.'); }}><BookOpen size={15} /> Jelajahi ayat</button></div>
+            {activeCollection.verseKeys.length ? (
+              <section className="verse-collection-verse-list" aria-label={`Ayat dalam koleksi ${activeCollection.name}`}>
+                {activeCollection.verseKeys.map((key, index) => {
+                  const row = getVerseRow(key);
+                  const note = verseNotes[key];
+                  return <article className="verse-collection-verse card-surface" key={key}><span className="verse-collection-verse-index">{index + 1}</span><div className="verse-collection-verse-copy"><strong>{row.surahName} · Ayat {row.verseNumber}</strong><small>{row.surahArabic} · Referensi {row.surahId}:{row.verseNumber}</small>{note?.text && <p>{note.text}</p>}</div><div className="verse-collection-verse-actions"><button type="button" className="icon-button small" title="Buka ayat" aria-label={`Buka ${row.surahName} ayat ${row.verseNumber}`} onClick={() => openVerseFromCollection(key)}><ArrowRight size={15} /></button><button type="button" className={`icon-button small ${bookmarkedVerses.includes(key) ? 'is-saved' : ''}`} title={bookmarkedVerses.includes(key) ? 'Hapus bookmark umum' : 'Simpan bookmark umum'} aria-label={bookmarkedVerses.includes(key) ? 'Hapus bookmark umum' : 'Simpan bookmark umum'} onClick={() => toggleVerseBookmark(row.verseNumber, row.surahId)}><Bookmark size={14} fill={bookmarkedVerses.includes(key) ? 'currentColor' : 'none'} /></button><button type="button" className="icon-button small collection-delete-action" title="Keluarkan dari koleksi" aria-label={`Keluarkan ${row.surahName} ayat ${row.verseNumber} dari koleksi`} onClick={() => removeVerseFromCollection(activeCollection.id, key)}><X size={15} /></button></div></article>;
+                })}
+              </section>
+            ) : <div className="empty-state card-surface"><span className="empty-icon"><BookOpen size={22} /></span><strong>Koleksi ini belum memiliki ayat</strong><p>Tambahkan dari bookmark yang sudah ada atau buka surah, lalu gunakan ikon folder pada kartu ayat.</p><button type="button" className="button button-gold" onClick={() => setBookmarkCollectionTargetId(activeCollection.id)}><BookmarkPlus size={15} /> Pilih dari bookmark</button></div>}
+          </>
+        ) : (
+          <>
+            <div className="verse-collections-toolbar"><div className="search-box"><Search size={17} /><input type="search" value={collectionSearch} onChange={(event) => setCollectionSearch(event.target.value)} placeholder="Cari nama atau catatan koleksi…" aria-label="Cari koleksi ayat" /></div><button type="button" className="button button-gold" onClick={startCreateCollection} disabled={verseCollections.length >= MAX_VERSE_COLLECTIONS}><Plus size={16} /> Buat koleksi</button></div>
+            <div className="verse-collections-summary card-surface"><div><span>Jumlah folder</span><strong>{verseCollections.length} / {MAX_VERSE_COLLECTIONS}</strong></div><div><span>Ayat dalam koleksi</span><strong>{verseCollections.reduce((total, collection) => total + collection.verseKeys.length, 0).toLocaleString('id-ID')}</strong></div><p>Koleksi dan isinya tersimpan di perangkat ini. Tambahkan ayat melalui hasil pencarian atau ikon folder di kartu ayat.</p></div>
+            {filteredCollections.length ? <section className="verse-collection-grid" aria-label="Daftar koleksi ayat">{filteredCollections.map((collection) => <article className={`verse-collection-card card-surface collection-color-${collection.color}`} key={collection.id}><button type="button" className="verse-collection-card-open" onClick={() => setSelectedCollectionId(collection.id)}><span className="verse-collection-color-mark"><Folder size={21} /></span><span className="verse-collection-card-copy"><strong>{collection.name}</strong><small>{collection.verseKeys.length} ayat · Diperbarui {new Date(collection.updatedAt || collection.createdAt || Date.now()).toLocaleDateString('id-ID')}</small>{collection.description && <span>{collection.description}</span>}</span><ArrowRight size={17} /></button><div className="verse-collection-card-footer"><span>{collection.verseKeys.slice(0, 3).map((key) => { const row = getVerseRow(key); return `${row.surahId}:${row.verseNumber}`; }).join(' · ')}{collection.verseKeys.length > 3 ? ` +${collection.verseKeys.length - 3}` : ''}</span><div><button type="button" className="icon-button small" title="Ubah koleksi" aria-label={`Ubah koleksi ${collection.name}`} onClick={() => startEditCollection(collection)}><PencilLine size={14} /></button><button type="button" className="icon-button small collection-delete-action" title="Hapus koleksi" aria-label={`Hapus koleksi ${collection.name}`} onClick={() => deleteVerseCollection(collection)}><Trash2 size={14} /></button></div></div></article>)}</section> : <div className="empty-state card-surface"><span className="empty-icon"><FolderOpen size={22} /></span><strong>{collectionSearch ? 'Koleksi tidak ditemukan' : 'Belum ada koleksi ayat'}</strong><p>{collectionSearch ? 'Coba kata lain atau hapus filter pencarian.' : 'Buat folder pertama, misalnya “Sabar”, “Syukur”, “Keluarga”, atau “Bahan kajian”.'}</p>{!collectionSearch && <button type="button" className="button button-gold" onClick={startCreateCollection}><Plus size={15} /> Buat koleksi pertama</button>}</div>}
+            <p className="verse-collections-privacy-note"><ShieldCheck size={15} /> Koleksi tersimpan lokal dan ikut masuk ke file cadangan Nurani. Tidak ada koleksi yang diunggah ke server. Berbagi koleksi menyalin daftar referensi ayat dan tautan individual, bukan membuat URL publik untuk folder lokal.</p>
+          </>
+        )}
+      </div>
+    );
+  };
 
   const renderPrayer = () => (
     <div className="page-stack prayer-page">
@@ -2478,6 +2640,7 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
         {activeTab === 'home' && renderHome()}
         {activeTab === 'quran' && (selectedSurah ? renderReader() : renderSurahList())}
         {activeTab === 'search' && renderSearch()}
+        {activeTab === 'collections' && renderCollections()}
         {activeTab === 'stats' && renderTilawahStats()}
         {activeTab === 'prayer' && renderPrayer()}
         {activeTab === 'duas' && (activeDuaSlug ? renderDuaDetail() : renderDuas())}
@@ -2499,6 +2662,12 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
       <nav className="bottom-nav" aria-label="Navigasi utama">{NAV_ITEMS.map((item) => { const Icon = item.icon; const isActive = activeTab === item.id || (activeTab === 'stats' && item.id === 'home'); return <a key={item.id} href={TAB_PATHS[item.id]} className={`nav-item ${isActive ? 'active' : ''}`} onClick={(event) => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return; event.preventDefault(); setActiveDuaSlug(null); setActiveTab(item.id); if (item.id !== 'quran') setSelectedSurah(null); }} aria-current={isActive ? 'page' : undefined}><span className="nav-icon-wrap"><Icon size={20} strokeWidth={isActive ? 2.4 : 1.8} /></span><span>{item.label}</span></a>; })}</nav>
 
       {settingsOpen && <div className="modal-backdrop" onClick={() => setSettingsOpen(false)}><section className="modal-card settings-modal" onClick={(event) => event.stopPropagation()}><div className="modal-header"><div><p className="eyebrow">PENGATURAN</p><h2>Preferensi aplikasi</h2><p className="muted">Atur tampilan dan lindungi data tilawahmu.</p></div><button className="icon-button" onClick={() => setSettingsOpen(false)} aria-label="Tutup pengaturan"><X size={19} /></button></div><button className="settings-row" onClick={() => setTheme((value) => value === 'light' ? 'dark' : 'light')}><span className="settings-row-icon">{theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}</span><span><strong>Tampilan</strong><small>{theme === 'light' ? 'Mode terang' : 'Mode gelap'}</small></span><ChevronRight size={17} /></button><button className="settings-row" onClick={installApp}><span className="settings-row-icon"><Download size={18} /></span><span><strong>Pasang aplikasi</strong><small>Tambahkan Nurani ke layar utama</small></span><ChevronRight size={17} /></button><section className="reminder-settings-section"><div className="reminder-section-heading"><span className="settings-row-icon"><BellRing size={18} /></span><div><strong>Pengingat tilawah dan doa</strong><small>Atur sampai {REMINDER_MAX_COUNT} jadwal sesuai waktu dan hari pilihanmu.</small></div></div><div className="reminder-permission-row"><div className="reminder-permission-copy"><strong>{notificationPermission === 'granted' ? 'Notifikasi sistem diizinkan' : notificationPermission === 'denied' ? 'Notifikasi diblokir browser' : notificationPermission === 'unsupported' ? 'Notifikasi sistem tidak tersedia' : 'Notifikasi sistem belum diaktifkan'}</strong><small>{notificationPermission === 'denied' ? 'Ubah izin melalui pengaturan situs di browser.' : notificationPermission === 'granted' ? 'Pengingat dapat tampil sebagai notifikasi saat halaman berjalan di latar belakang.' : 'Izin hanya diminta setelah tombol di bawah ditekan.'}</small></div><button type="button" className="button button-secondary reminder-permission-button" onClick={requestReminderPermission} disabled={['granted', 'denied', 'unsupported'].includes(notificationPermission)}>{notificationPermission === 'granted' ? 'Diaktifkan' : notificationPermission === 'denied' ? 'Izin diblokir' : notificationPermission === 'unsupported' ? 'Tidak didukung' : 'Aktifkan notifikasi'}</button></div><form className="reminder-form" onSubmit={saveReminder}><label className="reminder-field-label">Nama pengingat<input type="text" maxLength={60} value={reminderDraft.title} onChange={(event) => setReminderDraft((current) => ({ ...current, title: event.target.value }))} placeholder="Contoh: Tilawah setelah Subuh" required /></label><div className="reminder-form-grid"><label className="reminder-field-label">Waktu<input type="time" value={reminderDraft.time} onChange={(event) => setReminderDraft((current) => ({ ...current, time: event.target.value }))} required /></label><label className="reminder-field-label">Jenis pengingat<select value={reminderDraft.kind} onChange={(event) => setReminderDraft((current) => ({ ...current, kind: event.target.value }))}><option value="tilawah">Tilawah</option><option value="doa">Doa harian</option><option value="both">Tilawah & doa</option></select></label></div><div className="reminder-days-field"><span className="reminder-field-title">Ulangi pada</span><div className="reminder-days-options" role="group" aria-label="Pilih hari pengingat">{REMINDER_DAY_OPTIONS.map((day) => <label key={day.value} className={reminderDraft.days.includes(day.value) ? 'is-selected' : ''}><input type="checkbox" checked={reminderDraft.days.includes(day.value)} onChange={(event) => setReminderDraft((current) => ({ ...current, days: event.target.checked ? [...new Set([...current.days, day.value])].sort((a, b) => a - b) : current.days.filter((value) => value !== day.value) }))} /><span>{day.short}</span></label>)}</div></div><label className="reminder-enabled-draft"><input type="checkbox" checked={reminderDraft.enabled !== false} onChange={(event) => setReminderDraft((current) => ({ ...current, enabled: event.target.checked }))} /><span>Aktifkan jadwal ini</span></label><div className="reminder-form-actions"><button type="submit" className="button button-gold"><Check size={15} /> {reminderEditingId ? 'Simpan perubahan' : 'Tambah pengingat'}</button>{reminderEditingId && <button type="button" className="button button-secondary" onClick={() => { setReminderEditingId(null); setReminderDraft({ ...DEFAULT_REMINDER_DRAFT, days: [...DEFAULT_REMINDER_DRAFT.days] }); }}>Batal edit</button>}</div></form><div className="reminder-saved-list-heading"><strong>Jadwal tersimpan</strong><span>{reminders.length}/{REMINDER_MAX_COUNT}</span></div>{reminders.length ? <div className="reminder-saved-list">{reminders.map((reminder) => <article className={`reminder-item${reminder.enabled ? '' : ' is-disabled'}`} key={reminder.id}><div className="reminder-item-time">{reminder.time}</div><div className="reminder-item-copy"><strong>{reminder.title}</strong><small>{REMINDER_KIND_LABELS[reminder.kind]} · {reminder.days.map((day) => REMINDER_DAY_OPTIONS.find((option) => option.value === day)?.short).filter(Boolean).join(', ')}</small><label className="reminder-item-toggle"><input type="checkbox" checked={reminder.enabled} onChange={(event) => setReminders((current) => current.map((item) => item.id === reminder.id ? { ...item, enabled: event.target.checked, updatedAt: Date.now() } : item))} /><span>{reminder.enabled ? 'Aktif' : 'Nonaktif'}</span></label></div><div className="reminder-item-actions"><button type="button" className="icon-button small" aria-label={`Edit pengingat ${reminder.title}`} title="Edit pengingat" onClick={() => editReminder(reminder)}><PencilLine size={14} /></button><button type="button" className="icon-button small offline-remove-button" aria-label={`Hapus pengingat ${reminder.title}`} title="Hapus pengingat" onClick={() => deleteReminder(reminder.id)}><Trash2 size={14} /></button></div></article>)}</div> : <div className="reminder-empty-state"><BellRing size={18} /><span>Belum ada pengingat. Tambahkan jadwal untuk membantu menjaga kebiasaan tilawah atau membaca doa.</span></div>}<p className="reminder-limitation-note">Pengingat diperiksa saat halaman atau PWA Nurani berjalan. Browser dapat membatasi timer di latar belakang; jika aplikasi benar-benar ditutup, jadwal ini tidak dijamin berjalan. Notifikasi latar belakang yang andal memerlukan layanan push di server.</p></section><section className="backup-section"><div className="backup-section-heading"><span className="settings-row-icon"><ShieldCheck size={18} /></span><div><strong>Cadangkan & pulihkan data</strong><small>Bookmark, progres, posisi bacaan, target harian, pengingat, favorit, pengaturan, dan catatan tadabbur.</small></div></div><div className="backup-actions"><button type="button" className="button button-secondary" onClick={exportLocalBackup}><Download size={16} /> Ekspor cadangan</button><button type="button" className="button button-gold" onClick={() => backupFileInputRef.current?.click()}><Upload size={16} /> Impor cadangan</button><input ref={backupFileInputRef} className="backup-file-input" type="file" accept=".json,application/json" onChange={importLocalBackup} aria-label="Pilih file cadangan Nurani" /></div><p className="backup-privacy-note">Cadangan dibuat sebagai file JSON yang tersimpan di perangkat. File ini dapat berisi catatan pribadi—simpan di tempat yang aman dan jangan membagikannya secara publik. Impor hanya memproses key Nurani yang dikenal (maks. 5 MB).</p></section><section className="offline-manager-section"><button type="button" className="offline-manager-toggle" aria-expanded={offlineManagerExpanded} onClick={() => { const next = !offlineManagerExpanded; setOfflineManagerExpanded(next); if (next) void refreshOfflineStorage(); }}><span className="settings-row-icon">{online ? <Download size={18} /> : <WifiOff size={18} />}</span><span className="offline-manager-toggle-copy"><strong>Kelola konten offline</strong><small>{offlineSurahs.length} surah ditandai · {formatStorageBytes(offlineStorageStats.pinnedBytes)} data ayat</small></span>{offlineManagerExpanded ? <ChevronDown size={17} /> : <ChevronRight size={17} />}</button>{offlineManagerExpanded && <div className="offline-manager-body"><div className="offline-stats-grid"><div className="offline-stat"><span>Cache ayat lokal</span><strong>{offlineStorageStats.cachedSurahIds.length} surah</strong><small>{formatStorageBytes(offlineStorageStats.cachedVerseBytes)}</small></div><div className="offline-stat"><span>Penyimpanan origin</span><strong>{offlineStorageStats.originUsage === null ? 'Tidak tersedia' : formatStorageBytes(offlineStorageStats.originUsage)}</strong><small>{offlineStorageStats.originQuota === null ? 'Estimasi browser tidak didukung' : `Dari ${formatStorageBytes(offlineStorageStats.originQuota)} yang diizinkan`}</small></div></div>{offlineStorageStats.missingPinnedSurahIds.length > 0 && <p className="offline-manager-warning"><WifiOff size={14} /> {offlineStorageStats.missingPinnedSurahIds.length} surah ditandai offline tetapi data ayatnya tidak ditemukan. Simpan ulang surah saat online.</p>}{offlineSurahs.length > 0 ? <div className="offline-manager-list">{offlineSurahs.map((id) => { const surah = surahs.find((item) => Number(item.nomor) === Number(id)) || fallbackSurahs[Number(id) - 1]; const rows = offlineStorageStats.cachedVerseCounts[Number(id)] || 0; return <div className="offline-manager-item" key={id}><span className="offline-manager-book"><BookOpen size={16} /></span><div className="offline-manager-item-copy"><strong>{surah?.namaLatin || `Surah ${id}`}</strong><small>{rows ? `${rows} ayat tersimpan · ${formatStorageBytes(offlineStorageStats.cachedSurahBytes[Number(id)] || 0)}` : 'Data ayat perlu disimpan ulang'}</small></div><button type="button" className="icon-button small" aria-label={`Buka ${surah?.namaLatin || `Surah ${id}`}`} title="Buka surah" onClick={() => { setSettingsOpen(false); void openSurah(surah, 1); }}><ArrowRight size={15} /></button><button type="button" className="icon-button small offline-remove-button" aria-label={`Hapus ${surah?.namaLatin || `Surah ${id}`} dari data offline`} title="Hapus data offline" onClick={() => removeOfflineSurah(id)}><Trash2 size={14} /></button></div>; })}</div> : <div className="offline-manager-empty"><WifiOff size={18} /><span>Belum ada surah yang ditandai untuk akses offline. Buka surah saat terhubung internet lalu tekan <strong>Simpan offline</strong>.</span></div>}<button type="button" className="button button-danger-ghost offline-clear-button" onClick={clearOfflineQuranData} disabled={offlineStorageStats.cachedSurahIds.length === 0 && offlineSurahs.length === 0}><Trash2 size={14} /> Hapus semua cache ayat</button><p className="offline-manager-note">Estimasi penyimpanan berasal dari browser dan dapat mencakup cache serta data Nurani lain di origin yang sama. Catatan, bookmark, progres, dan file cadangan tidak ikut dihapus saat cache ayat dibersihkan.</p><button type="button" className="text-link offline-refresh-button" onClick={() => void refreshOfflineStorage()}><RefreshCw size={13} /> Perbarui informasi penyimpanan</button><section className="offline-audio-manager"><div className="offline-audio-manager-heading"><span className="settings-row-icon"><Headphones size={18} /></span><div><strong>Audio murottal offline</strong><small>{offlineAudioTracks.length} file · {new Set(offlineAudioTracks.map((track) => track.reciterId || track.reciter)).size} qari · {formatStorageBytes(offlineAudioStats.cachedBytes)} tersimpan</small></div></div><label className="offline-audio-filter"><span>Filter qari</span><select value={offlineAudioFilter} onChange={(event) => setOfflineAudioFilter(event.target.value)} aria-label="Filter audio offline berdasarkan qari"><option value="all">Semua qari</option>{QARIS.map((qari, index) => <option key={QARI_IDS[index]} value={QARI_IDS[index]}>{qari}</option>)}</select></label>{offlineAudioStats.missingSrcs.length > 0 && <p className="offline-manager-warning"><WifiOff size={14} /> {offlineAudioStats.missingSrcs.length} audio tercatat tetapi file cache tidak ditemukan. Hubungkan internet dan unduh ulang.</p>}{offlineAudioTracks.length ? (offlineAudioTracks.filter((track) => offlineAudioFilter === 'all' || track.reciterId === offlineAudioFilter).length ? <div className="offline-manager-list offline-audio-list">{offlineAudioTracks.filter((track) => offlineAudioFilter === 'all' || track.reciterId === offlineAudioFilter).map((track) => { const available = offlineAudioStats.cachedSrcs.includes(track.src); return <div className="offline-manager-item" key={`${track.surahId}:${track.reciterId || track.src}:${track.type || 'full'}:${track.verseNumber || 0}`}><span className="offline-manager-book"><Headphones size={16} /></span><div className="offline-manager-item-copy"><strong>{track.title}</strong><small>{track.reciter} · {available ? formatStorageBytes(track.bytes) : 'File cache tidak ditemukan'}</small></div><button type="button" className="icon-button small offline-remove-button" aria-label={`Hapus audio ${track.title}, ${track.reciter}`} title="Hapus audio offline" onClick={() => void removeOfflineAudioTrack(track)}><Trash2 size={14} /></button></div>; })}</div> : <div className="offline-manager-empty"><Headphones size={18} /><span>Belum ada audio untuk qari ini. Pilih qari pada halaman surah lalu tekan <strong>Unduh audio</strong>.</span></div>) : <div className="offline-manager-empty"><Headphones size={18} /><span>Belum ada audio yang diunduh. Buka surah, pilih qari, lalu tekan <strong>Unduh audio</strong>.</span></div>}{audioDownloadProgress && <p className="offline-audio-downloading"><LoaderCircle size={14} className="spin" /> Mengunduh {audioDownloadProgress.title} · {audioDownloadProgress.reciter}: {audioDownloadProgress.total ? `${Math.min(100, Math.round(audioDownloadProgress.loaded / audioDownloadProgress.total * 100))}%` : formatStorageBytes(audioDownloadProgress.loaded)}</p>}{offlineAudioFilter !== 'all' && offlineAudioTracks.some((track) => track.reciterId === offlineAudioFilter) && <button className="button button-danger-ghost offline-clear-button" onClick={() => void clearOfflineAudioForReciter(offlineAudioFilter)}><Trash2 size={14} /> Hapus semua audio qari ini</button>}<button className="button button-danger-ghost offline-clear-button" onClick={() => void clearOfflineAudioTracks()} disabled={!offlineAudioTracks.length && !offlineAudioStats.cachedSrcs.length}><Trash2 size={14} /> Hapus semua audio offline</button><p className="offline-manager-note">EQuran menyediakan MP3 berkualitas tinggi tanpa pilihan bitrate resmi. Untuk lebih hemat, gunakan ikon unduh pada kartu ayat agar hanya ayat yang diperlukan tersimpan; Anda juga dapat mengunduh satu surah penuh. Maksimal 80 MB per file dan 200 MB total.</p><button className="text-link offline-refresh-button" onClick={() => void refreshOfflineAudioStats()}><RefreshCw size={13} /> Periksa ulang cache audio</button></section></div>}</section><div className="settings-note"><ShieldCheck size={16} /><span>Data utama tetap disimpan lokal di perangkat ini. Katalog surah dan doa yang dapat diambil ulang tidak dimasukkan ke file cadangan.</span></div></section></div>}
+
+      {collectionVerseTarget && <div className="modal-backdrop" onClick={() => setCollectionVerseTarget(null)}><section className="modal-card verse-collection-picker-modal" onClick={(event) => event.stopPropagation()}><div className="modal-header"><div><p className="eyebrow">SIMPAN AYAT</p><h2>Masukkan ke koleksi</h2><p className="muted">{collectionVerseTarget.surahName} · Ayat {collectionVerseTarget.verseNumber}</p></div><button type="button" className="icon-button" onClick={() => setCollectionVerseTarget(null)} aria-label="Tutup pemilih koleksi"><X size={19} /></button></div><p className="verse-collection-picker-hint">Satu ayat bisa dimasukkan ke beberapa koleksi. Tindakan ini tidak menghapus atau mengubah bookmark umum.</p>{verseCollections.length ? <div className="verse-collection-picker-list">{verseCollections.map((collection) => { const key = `${collectionVerseTarget.surahNumber}:${collectionVerseTarget.verseNumber}`; const included = collection.verseKeys.includes(key); return <div className={`verse-collection-picker-item collection-color-${collection.color}`} key={collection.id}><span className="verse-collection-color-dot" /><div><strong>{collection.name}</strong><small>{collection.verseKeys.length} ayat</small></div><button type="button" className={`button ${included ? 'button-secondary' : 'button-gold'}`} onClick={() => toggleCollectionVerse(collection.id, key)}>{included ? <><Check size={14} /> Sudah ditambahkan</> : <><Plus size={14} /> Tambahkan</>}</button></div>; })}</div> : <div className="empty-state collection-picker-empty"><span className="empty-icon"><FolderPlus size={21} /></span><strong>Belum ada folder</strong><p>Buat koleksi pertama lalu ayat ini akan langsung dimasukkan ke dalamnya.</p></div>}<div className="verse-collection-picker-actions"><button type="button" className="button button-secondary" onClick={startCreateCollection} disabled={verseCollections.length >= MAX_VERSE_COLLECTIONS}><FolderPlus size={15} /> Buat koleksi baru</button><button type="button" className="button button-gold" onClick={() => setCollectionVerseTarget(null)}>Selesai</button></div></section></div>}
+
+      {bookmarkCollectionTargetId && <div className="modal-backdrop" onClick={() => setBookmarkCollectionTargetId(null)}><section className="modal-card verse-collection-bookmarks-modal" onClick={(event) => event.stopPropagation()}><div className="modal-header"><div><p className="eyebrow">ATUR FOLDER BOOKMARK</p><h2>Tambah dari bookmark</h2><p className="muted">Pilih ayat yang sudah Anda bookmark untuk dimasukkan ke koleksi ini.</p></div><button type="button" className="icon-button" onClick={() => setBookmarkCollectionTargetId(null)} aria-label="Tutup bookmark"><X size={19} /></button></div>{bookmarkedVerses.length ? <div className="verse-collection-bookmark-list">{bookmarkedVerses.map((key) => { const [surahId, verseNumber] = key.split(':').map(Number); const surah = surahs.find((item) => Number(item.nomor) === surahId) || fallbackSurahs[surahId - 1]; const collection = verseCollections.find((item) => item.id === bookmarkCollectionTargetId); const included = collection?.verseKeys.includes(key); return <div className="verse-collection-bookmark-item" key={key}><div><strong>{surah?.namaLatin || `Surah ${surahId}`} · Ayat {verseNumber}</strong><small>Referensi {key}{included ? ' · Sudah di koleksi' : ''}</small></div><button type="button" className={`button ${included ? 'button-secondary' : 'button-gold'}`} onClick={() => toggleCollectionVerse(bookmarkCollectionTargetId, key)}>{included ? <><Check size={14} /> Dimasukkan</> : <><Plus size={14} /> Tambahkan</>}</button><button type="button" className="icon-button small" title="Buka ayat" aria-label={`Buka ${surah?.namaLatin || `Surah ${surahId}`} ayat ${verseNumber}`} onClick={() => { setBookmarkCollectionTargetId(null); openVerseFromCollection(key); }}><ArrowRight size={15} /></button></div>; })}</div> : <div className="empty-state"><span className="empty-icon"><Bookmark size={21} /></span><strong>Belum ada bookmark ayat</strong><p>Simpan bookmark pada kartu ayat terlebih dahulu, lalu Anda bisa memasukkannya ke dalam folder.</p><button type="button" className="button button-secondary" onClick={() => { setBookmarkCollectionTargetId(null); setActiveTab('quran'); setSelectedSurah(null); }}>Buka Al-Qur’an</button></div>}<div className="modal-footnote"><ShieldCheck size={15} /><span>Memasukkan ayat ke folder tidak menghapus bookmark umum. Perubahan hanya tersimpan pada perangkat ini.</span></div></section></div>}
+
+      {collectionEditorOpen && <div className="modal-backdrop collection-editor-backdrop" onClick={() => setCollectionEditorOpen(false)}><section className="modal-card verse-collection-editor-modal" onClick={(event) => event.stopPropagation()}><div className="modal-header"><div><p className="eyebrow">FOLDER BOOKMARK</p><h2>{editingCollectionId ? 'Ubah koleksi' : 'Buat koleksi baru'}</h2><p className="muted">{collectionVerseTarget ? `${collectionVerseTarget.surahName} · Ayat ${collectionVerseTarget.verseNumber} akan ikut disimpan saat folder dibuat.` : 'Kelompokkan ayat berdasarkan tema atau kebutuhan belajar.'}</p></div><button type="button" className="icon-button" onClick={() => setCollectionEditorOpen(false)} aria-label="Tutup editor koleksi"><X size={19} /></button></div><form className="verse-collection-editor-form" onSubmit={saveVerseCollection}><label className="reminder-field-label">Nama koleksi<input type="text" value={collectionDraft.name} onChange={(event) => setCollectionDraft((current) => ({ ...current, name: event.target.value.slice(0, COLLECTION_NAME_MAX_LENGTH) }))} maxLength={COLLECTION_NAME_MAX_LENGTH} placeholder="Contoh: Sabar, Syukur, Bahan Kajian" required autoFocus /><small>{collectionDraft.name.length}/{COLLECTION_NAME_MAX_LENGTH} karakter</small></label><label className="reminder-field-label">Tema atau catatan singkat<textarea value={collectionDraft.description} onChange={(event) => setCollectionDraft((current) => ({ ...current, description: event.target.value.slice(0, COLLECTION_DESCRIPTION_MAX_LENGTH) }))} maxLength={COLLECTION_DESCRIPTION_MAX_LENGTH} rows={3} placeholder="Misalnya: ayat untuk bahan kajian pekanan…" /><small>{collectionDraft.description.length}/{COLLECTION_DESCRIPTION_MAX_LENGTH} karakter</small></label><div className="verse-collection-colors"><span>Warna folder</span><div role="group" aria-label="Pilih warna koleksi">{VERSE_COLLECTION_COLORS.map((color) => <button key={color.value} type="button" className={collectionDraft.color === color.value ? 'is-selected' : ''} style={{ '--collection-color': color.hex }} title={color.label} aria-label={color.label} aria-pressed={collectionDraft.color === color.value} onClick={() => setCollectionDraft((current) => ({ ...current, color: color.value }))}><span /></button>)}</div></div><div className="verse-collection-editor-actions"><button type="button" className="button button-secondary" onClick={() => setCollectionEditorOpen(false)}>Batal</button><button type="submit" className="button button-gold"><Check size={15} /> {editingCollectionId ? 'Simpan perubahan' : 'Buat koleksi'}</button></div></form></section></div>}
 
       {verseNotesModalOpen && <div className="modal-backdrop" onClick={() => setVerseNotesModalOpen(false)}><section className="modal-card verse-notes-modal" onClick={(event) => event.stopPropagation()}><div className="modal-header"><div><p className="eyebrow">CATATAN PRIBADI</p><h2>Semua catatan tadabbur</h2><p className="muted">{allVerseNotes.length} catatan tersimpan di perangkat ini.</p></div><button className="icon-button" onClick={() => setVerseNotesModalOpen(false)} aria-label="Tutup catatan"><X size={19} /></button></div><div className="verse-notes-modal-list">{allVerseNotes.map((note) => <div className="verse-notes-modal-item" key={`${note.surahId}:${note.verseNumber}`}><div className="verse-notes-modal-item-copy"><strong>{note.surahName} · Ayat {note.verseNumber}</strong><p>{note.text}</p><small>{new Date(note.updatedAt || Date.now()).toLocaleString('id-ID')}</small></div><div className="verse-notes-modal-item-actions"><button type="button" className="icon-button small" aria-label={`Buka ${note.surahName} ayat ${note.verseNumber}`} onClick={() => openVerseFromNote(note)}><ArrowRight size={16} /></button><button type="button" className="icon-button small note-delete-action" aria-label={`Hapus catatan ${note.surahName} ayat ${note.verseNumber}`} onClick={() => deleteVerseNote(`${note.surahId}:${note.verseNumber}`)}><Trash2 size={15} /></button></div></div>)}</div><div className="modal-footnote"><ShieldCheck size={15} /><span>Catatan hanya disimpan pada browser/perangkat ini. Catatan tidak diunggah ke server dan tidak tersinkron otomatis ke perangkat lain.</span></div></section></div>}
 

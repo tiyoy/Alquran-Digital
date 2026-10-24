@@ -25,7 +25,8 @@ export const metadata = {
     'Kompas kiblat',
     'Warna tajwid digital',
     'Belajar hukum tajwid Al-Qur’an',
-    'Pencarian Al-Qur’an Arab Latin dan terjemahan Indonesia'
+    'Pencarian Al-Qur’an Arab Latin dan terjemahan Indonesia',
+    'Koleksi ayat Al-Qur’an dan folder bookmark'
   ],
   alternates: {
     canonical: '/'
@@ -108,7 +109,8 @@ const structuredData = {
     'Dukungan Progressive Web App',
     'Arah kiblat dengan lokasi dan kompas perangkat',
     'Warna tajwid berdasarkan anotasi edisi quran-tajweed',
-    'Pencarian ayat berdasarkan teks Arab, transliterasi Latin, dan terjemahan Indonesia'
+    'Pencarian ayat berdasarkan teks Arab, transliterasi Latin, dan terjemahan Indonesia',
+    'Koleksi ayat dan folder bookmark berdasarkan tema'
   ]
 };
 

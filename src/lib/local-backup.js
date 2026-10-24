@@ -1,3 +1,4 @@
+import { validateVerseCollections } from './verse-collections';
 import { validateReminderList } from './local-reminders';
 
 export const LOCAL_BACKUP_FORMAT = 'nurani-local-backup';
@@ -10,6 +11,7 @@ export const LOCAL_BACKUP_KEYS = Object.freeze([
   'aq:theme',
   'aq:bookmarked-surahs',
   'aq:bookmarked-verses',
+  'aq:verse-collections',
   'aq:verse-notes',
   'aq:last-read',
   'aq:read-verse-keys',
@@ -27,6 +29,7 @@ export const LOCAL_BACKUP_LABELS = Object.freeze({
   'aq:theme': 'Tema aplikasi',
   'aq:bookmarked-surahs': 'Bookmark surah',
   'aq:bookmarked-verses': 'Bookmark ayat',
+  'aq:verse-collections': 'Koleksi ayat dan folder bookmark',
   'aq:verse-notes': 'Catatan tadabbur',
   'aq:last-read': 'Posisi bacaan terakhir',
   'aq:read-verse-keys': 'Progres ayat yang dibaca',
@@ -118,6 +121,10 @@ function normalizeBackupValue(key, value) {
       const rows = cleanVerseKeys(value, 6236);
       return rows ? { valid: true, value: rows } : { valid: false };
     }
+    case 'aq:verse-collections': {
+      const collections = validateVerseCollections(value);
+      return collections ? { valid: true, value: collections } : { valid: false };
+    }
     case 'aq:verse-notes': {
       const notes = normalizeVerseNotes(value);
       return notes ? { valid: true, value: notes } : { valid: false };
@@ -167,7 +174,7 @@ function normalizeBackupValue(key, value) {
   }
 }
 
-export function createLocalBackup(storage, appVersion = '1.20.0', exportedAt = new Date().toISOString()) {
+export function createLocalBackup(storage, appVersion = '1.21.0', exportedAt = new Date().toISOString()) {
   const data = {};
   LOCAL_BACKUP_KEYS.forEach((key) => {
     const raw = storage.getItem(key);
@@ -225,6 +232,7 @@ export function describeLocalBackupValue(key, value) {
   if (key === 'aq:verse-notes') return `${Object.keys(value || {}).length} catatan`;
   if (key === 'aq:bookmarked-surahs') return `${(value || []).length} surah`;
   if (key === 'aq:bookmarked-verses') return `${(value || []).length} ayat`;
+  if (key === 'aq:verse-collections') return `${(value || []).length} koleksi`;
   if (key === 'aq:read-verse-keys') return `${(value || []).length} ayat ditandai dibaca`;
   if (key === 'aq:reading-days') return `${Object.keys(value || {}).length} hari`;
   if (key === 'aq:favorite-asma') return `${(value || []).length} nama`;
