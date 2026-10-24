@@ -145,7 +145,7 @@ function normalizeBackupValue(key, value) {
   }
 }
 
-export function createLocalBackup(storage, appVersion = '1.9.0', exportedAt = new Date().toISOString()) {
+export function createLocalBackup(storage, appVersion = '1.10.0', exportedAt = new Date().toISOString()) {
   const data = {};
   LOCAL_BACKUP_KEYS.forEach((key) => {
     const raw = storage.getItem(key);

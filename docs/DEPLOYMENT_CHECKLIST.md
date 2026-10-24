@@ -48,7 +48,11 @@ npm run start
 - [ ] Jadwal shalat memulai dari Kab. Bogor dan pencarian kota lain masih berfungsi.
 - [ ] Asmaul Husna memuat 99 nama.
 - [ ] Dari reader, tandai satu surah untuk offline, matikan jaringan, lalu uji halaman baca yang telah dimuat sebelumnya.
-- [ ] Pada Chrome DevTools → Application, pastikan manifest, ikon, dan service worker valid.
+- [ ] Buka Pengaturan → Kelola konten offline; pastikan jumlah surah, ukuran cache lokal, dan estimasi storage tampil jika browser mendukung.
+- [ ] Hapus satu surah offline; pastikan hanya cache ayat/rute yang terkait yang hilang, sedangkan bookmark, catatan tadabbur, posisi bacaan, dan progres tetap ada.
+- [ ] Pilih Hapus semua cache ayat; pastikan daftar offline kosong, namun data pribadi Nurani tetap dipertahankan.
+- [ ] Setelah menekan Simpan offline, uji rute surah/ayat saat offline. Cache HTML rute bersifat best-effort; pastikan pembaca tetap dapat menggunakan cache ayat lokal setelah app shell terbuka.
+- [ ] Pada Chrome DevTools → Application, pastikan manifest, ikon, dan service worker valid serta memakai cache `nurani-pwa-v18`.
 
 > Catatan offline: aplikasi menyimpan data yang telah dimuat atau ditandai. Audio dari sumber eksternal dan konten yang belum pernah dibuka mungkin tetap membutuhkan internet.
 

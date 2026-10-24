@@ -128,3 +128,13 @@ alquran-digital-nextjs/
 - Backup mencakup bookmark, catatan tadabbur, posisi bacaan terakhir, progres membaca, target khatam, pengulangan audio, favorit Asmaul Husna, tema, dan preferensi pembaca.
 - Impor dibatasi 5 MB, hanya dapat menulis key cadangan yang dikenal, menampilkan konfirmasi, dan mempertahankan kategori yang tidak ada dalam file.
 - Detail format dan perilaku ada di `docs/LOCAL-DATA-BACKUP.md`.
+
+
+### Pembaruan implementasi v1.10.0 — Pengelolaan konten offline
+
+- Menambahkan panel **Kelola konten offline** pada Pengaturan.
+- Menampilkan jumlah surah yang ditandai offline, jumlah surah dengan data ayat lokal, estimasi ukuran cache ayat, serta estimasi penggunaan/kuota penyimpanan origin bila didukung browser.
+- Pengguna dapat membuka kembali surah yang tersimpan, menghapus data offline untuk satu surah, atau menghapus seluruh cache ayat Al-Qur'an.
+- Penghapusan cache ayat tidak menghapus bookmark, catatan tadabbur, posisi bacaan, progres khatam, atau pengaturan.
+- Service worker mencoba melakukan precache HTML untuk URL surah dan ayat saat pengguna menekan **Simpan offline**. Ini bersifat best-effort; data ayat lokal adalah jalur fallback utama di aplikasi.
+- Cache service worker diperbarui menjadi `nurani-pwa-v18`.

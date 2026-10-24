@@ -1,5 +1,5 @@
 /* Lightweight app-shell service worker for the Next.js App Router. */
-const SW_VERSION = 'nurani-pwa-v17';
+const SW_VERSION = 'nurani-pwa-v18';
 const APP_SHELL_CACHE = `${SW_VERSION}-shell`;
 const API_CACHE = `${SW_VERSION}-api`;
 const RUNTIME_CACHE = `${SW_VERSION}-runtime`;
@@ -21,6 +21,79 @@ self.addEventListener('activate', (event) => {
     await Promise.all(keys.filter((key) => key.startsWith('nurani-pwa-') && ![APP_SHELL_CACHE, API_CACHE, RUNTIME_CACHE].includes(key)).map((key) => caches.delete(key)));
     await self.clients.claim();
   })());
+});
+
+function isSurahRouteForId(pathname, surahId) {
+  const number = Number(surahId);
+  if (!Number.isInteger(number) || number < 1 || number > 114) return false;
+  return new RegExp(`^/quran/${number}-[a-z0-9-]+(?:/\\d+)?/?$`, 'i').test(String(pathname || ''));
+}
+
+async function cacheSurahReaderRoutes(message) {
+  const surahId = Number(message?.surahId);
+  if (!Number.isInteger(surahId) || surahId < 1 || surahId > 114 || !Array.isArray(message?.paths)) return;
+  const cache = await caches.open(APP_SHELL_CACHE);
+  await Promise.all(message.paths.slice(0, 2).map(async (path) => {
+    let routeUrl;
+    try { routeUrl = new URL(String(path), self.location.origin); } catch { return; }
+    if (routeUrl.origin !== self.location.origin || !isSurahRouteForId(routeUrl.pathname, surahId)) return;
+    // Save an HTML document response for direct offline navigation. This is best effort;
+    // localStorage verse rows remain the main fallback inside the running app.
+    try {
+      const response = await fetch(routeUrl.href, {
+        method: 'GET',
+        cache: 'no-store',
+        headers: { Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' }
+      });
+      const contentType = response.headers.get('content-type') || '';
+      if (response.ok && /text\/html/i.test(contentType)) await cache.put(routeUrl.href, response.clone());
+    } catch { /* An offline page can still use the pinned local verse data. */ }
+  }));
+}
+
+async function removeSurahOfflineCache(surahId) {
+  const number = Number(surahId);
+  if (!Number.isInteger(number) || number < 1 || number > 114) return;
+  const shell = await caches.open(APP_SHELL_CACHE);
+  const shellRequests = await shell.keys();
+  await Promise.all(shellRequests.map(async (request) => {
+    const url = new URL(request.url);
+    if (url.origin === self.location.origin && isSurahRouteForId(url.pathname, number)) await shell.delete(request);
+  }));
+
+  const api = await caches.open(API_CACHE);
+  const apiRequests = await api.keys();
+  await Promise.all(apiRequests.map(async (request) => {
+    const url = new URL(request.url);
+    const quranSurahEndpoint = url.hostname === 'equran.id' && new RegExp(`/surat/${number}(?:/|$)`).test(url.pathname);
+    if (quranSurahEndpoint) await api.delete(request);
+  }));
+}
+
+async function clearQuranOfflineCache() {
+  const shell = await caches.open(APP_SHELL_CACHE);
+  const shellRequests = await shell.keys();
+  await Promise.all(shellRequests.map(async (request) => {
+    const url = new URL(request.url);
+    if (url.origin === self.location.origin && /^\/quran\/\d+-[a-z0-9-]+(?:\/\d+)?\/?$/i.test(url.pathname)) await shell.delete(request);
+  }));
+  const api = await caches.open(API_CACHE);
+  const apiRequests = await api.keys();
+  await Promise.all(apiRequests.map(async (request) => {
+    const url = new URL(request.url);
+    if (url.hostname === 'equran.id' && /\/surat\/\d+(?:\/|$)/.test(url.pathname)) await api.delete(request);
+  }));
+}
+
+self.addEventListener('message', (event) => {
+  const message = event.data || {};
+  if (message.type === 'CACHE_SURAH_ROUTES') {
+    event.waitUntil(cacheSurahReaderRoutes(message));
+  } else if (message.type === 'REMOVE_SURAH_OFFLINE') {
+    event.waitUntil(removeSurahOfflineCache(message.surahId));
+  } else if (message.type === 'CLEAR_QURAN_OFFLINE') {
+    event.waitUntil(clearQuranOfflineCache());
+  }
 });
 
 self.addEventListener('fetch', (event) => {
@@ -92,7 +165,7 @@ self.addEventListener('fetch', (event) => {
         if (response && response.ok) cache.put(request, response.clone()).catch(() => {});
         return response;
       } catch {
-        return (await cache.match(request)) || (await cache.match(new URL('/', self.location.origin).toString())) || (await cache.match(new URL('/offline.html', self.location.origin).toString())) || Response.error();
+        return (await cache.match(request, { ignoreVary: true })) || (await cache.match(new URL('/', self.location.origin).toString(), { ignoreVary: true })) || (await cache.match(new URL('/offline.html', self.location.origin).toString(), { ignoreVary: true })) || Response.error();
       }
     })());
     return;

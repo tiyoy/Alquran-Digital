@@ -19,6 +19,7 @@ import {
   LOCAL_BACKUP_LABELS, LOCAL_BACKUP_MAX_BYTES,
   createLocalBackup, describeLocalBackupValue, validateLocalBackupPayload
 } from '@/lib/local-backup';
+import { formatStorageBytes, inspectOfflineStorage, normalizeOfflineSurahIds } from '@/lib/offline-storage';
 import {
   chooseAudio, cleanArabicText, fetchAllPrayerCities, fetchDuas, fetchPrayerCity, fetchPrayerSchedule,
   fetchQuran, firstArray, normalizeSurah, normalizeVerse, unwrapPayload
@@ -81,6 +82,15 @@ function readLocal(key, fallback) {
 }
 function writeLocal(key, value) {
   try { window.localStorage.setItem(key, JSON.stringify(value)); return true; } catch { return false; /* Storage can be disabled or full. */ }
+}
+function postToOfflineWorker(message) {
+  try {
+    if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+    navigator.serviceWorker.ready.then((registration) => {
+      const worker = registration.active || navigator.serviceWorker.controller;
+      worker?.postMessage(message);
+    }).catch(() => {});
+  } catch { /* Offline caching is an enhancement; local verse data remains available. */ }
 }
 function normalizeVerseNotes(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
@@ -209,6 +219,8 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
   const [readingDays, setReadingDays] = useState({});
   const [khatamDays, setKhatamDays] = useState(30);
   const [offlineSurahs, setOfflineSurahs] = useState([]);
+  const [offlineStorageStats, setOfflineStorageStats] = useState({ cachedSurahIds: [], cachedVerseCounts: {}, cachedSurahBytes: {}, cachedVerseBytes: 0, pinnedSurahIds: [], pinnedBytes: 0, missingPinnedSurahIds: [], originUsage: null, originQuota: null });
+  const [offlineManagerExpanded, setOfflineManagerExpanded] = useState(false);
   const [tafsirModal, setTafsirModal] = useState(null);
   const [tafsirLoading, setTafsirLoading] = useState(false);
   const [jumpVerse, setJumpVerse] = useState('');
@@ -262,6 +274,19 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
     showToast.timeout = window.setTimeout(() => setToast(''), 2800);
   }, []);
 
+  const refreshOfflineStorage = useCallback(async () => {
+    if (typeof window === 'undefined') return;
+    const details = inspectOfflineStorage(window.localStorage);
+    let originUsage = null;
+    let originQuota = null;
+    try {
+      const estimate = await navigator.storage?.estimate?.();
+      if (Number.isFinite(estimate?.usage)) originUsage = estimate.usage;
+      if (Number.isFinite(estimate?.quota)) originQuota = estimate.quota;
+    } catch { /* Storage estimates are optional and browser-dependent. */ }
+    setOfflineStorageStats({ ...details, originUsage, originQuota });
+  }, []);
+
   const markVerseRead = useCallback((surahNumber, verseNumber) => {
     const surahId = Number(surahNumber);
     const ayah = Number(verseNumber);
@@ -312,8 +337,8 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
     setReadingDays(savedReadingDays && typeof savedReadingDays === 'object' && !Array.isArray(savedReadingDays) ? savedReadingDays : {});
     const savedKhatamDays = Number(readLocal('aq:khatam-days', 30));
     setKhatamDays(KHATAM_OPTIONS.includes(savedKhatamDays) ? savedKhatamDays : 30);
-    const savedOfflineSurahs = readLocal('aq:offline-surahs', []);
-    setOfflineSurahs(Array.isArray(savedOfflineSurahs) ? [...new Set(savedOfflineSurahs.map(Number).filter((id) => Number.isInteger(id) && id >= 1 && id <= 114))] : []);
+    const savedOfflineSurahs = normalizeOfflineSurahIds(readLocal('aq:offline-surahs', []));
+    setOfflineSurahs(savedOfflineSurahs);
     const savedAudioRepeat = readLocal('aq:audio-repeat', 'off');
     setAudioRepeat(AUDIO_REPEAT_OPTIONS.some((option) => option.value === savedAudioRepeat) ? savedAudioRepeat : 'off');
     setFavoriteAsma(readLocal('aq:favorite-asma', []));
@@ -571,6 +596,9 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
     writeLocal('aq:offline-surahs', offlineSurahs);
   }, [offlineSurahs]);
   useEffect(() => {
+    if (settingsOpen) void refreshOfflineStorage();
+  }, [settingsOpen, offlineSurahs, refreshOfflineStorage]);
+  useEffect(() => {
     writeLocal('aq:audio-repeat', audioRepeat);
   }, [audioRepeat]);
   useEffect(() => {
@@ -796,8 +824,8 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
       return;
     }
     const id = Number(selectedSurah.nomor);
-    // Explicitly pin the currently loaded surah and metadata for offline access.
-    // API responses are also cached by the service worker when available.
+    // Pin the verse data and catalogue metadata in local storage so the reader
+    // can still open this surah through Nurani when the API is unreachable.
     const verseSaved = writeLocal(`aq:verses:${id}`, verses);
     const metadataSaved = writeLocal('aq:surahs', surahs);
     if (!verseSaved || !metadataSaved) {
@@ -805,7 +833,54 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
       return;
     }
     setOfflineSurahs((previous) => previous.includes(id) ? previous : [...previous, id].sort((a, b) => a - b));
-    showToast(`${selectedSurah.namaLatin} disimpan untuk akses offline di perangkat ini.`);
+
+    // Best-effort precache of the actual reader routes. The local verse data remains
+    // the primary offline fallback if a browser does not support route precaching.
+    try {
+      const currentVerse = getVerseNumberFromPathname(window.location.pathname) || 1;
+      const paths = [...new Set([getSurahPath(selectedSurah), getVersePath(selectedSurah, currentVerse)])];
+      postToOfflineWorker({ type: 'CACHE_SURAH_ROUTES', surahId: id, paths });
+    } catch { /* The local data has been saved even if route precaching is unavailable. */ }
+    window.setTimeout(() => { void refreshOfflineStorage(); }, 0);
+    showToast(`${selectedSurah.namaLatin} dan data ayatnya disimpan untuk akses offline di perangkat ini.`);
+  };
+
+  const removeOfflineSurah = (surahNumber) => {
+    const id = Number(surahNumber);
+    const surah = surahs.find((item) => Number(item.nomor) === id) || fallbackSurahs[id - 1];
+    if (!Number.isInteger(id) || id < 1 || id > 114 || !surah) return;
+    if (!window.confirm(`Hapus ${surah.namaLatin} dari konten offline? Bookmark, progres membaca, dan catatan tadabbur tidak akan dihapus.`)) return;
+    try {
+      window.localStorage.removeItem(`aq:verses:${id}`);
+      const next = normalizeOfflineSurahIds(offlineSurahs).filter((item) => item !== id);
+      window.localStorage.setItem('aq:offline-surahs', JSON.stringify(next));
+      setOfflineSurahs(next);
+      postToOfflineWorker({ type: 'REMOVE_SURAH_OFFLINE', surahId: id });
+      window.setTimeout(() => { void refreshOfflineStorage(); }, 0);
+      showToast(`${surah.namaLatin} dihapus dari data offline. Bookmark, catatan, dan progres tetap aman.`);
+    } catch {
+      showToast('Data offline belum bisa dihapus. Periksa pengaturan penyimpanan browser.');
+    }
+  };
+
+  const clearOfflineQuranData = () => {
+    const confirmed = window.confirm('Hapus semua cache ayat Al-Qur’an yang tersimpan di perangkat? Bookmark, catatan tadabbur, progres khatam, posisi bacaan, dan pengaturan tidak akan dihapus. Surah perlu dimuat kembali saat perangkat tersambung internet.');
+    if (!confirmed) return;
+    try {
+      const keys = [];
+      for (let index = 0; index < window.localStorage.length; index += 1) {
+        const key = window.localStorage.key(index);
+        if (key && /^aq:verses:\d+$/.test(key)) keys.push(key);
+      }
+      keys.forEach((key) => window.localStorage.removeItem(key));
+      window.localStorage.setItem('aq:offline-surahs', JSON.stringify([]));
+      setOfflineSurahs([]);
+      postToOfflineWorker({ type: 'CLEAR_QURAN_OFFLINE' });
+      window.setTimeout(() => { void refreshOfflineStorage(); }, 0);
+      showToast('Cache ayat dihapus. Bookmark, catatan, dan progres tetap dipertahankan.');
+    } catch {
+      showToast('Sebagian cache tidak dapat dihapus. Periksa ruang penyimpanan browser.');
+    }
   };
   const handleAudioEnded = () => {
     setAudioPlaying(false);
@@ -982,7 +1057,7 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
   };
   const exportLocalBackup = () => {
     try {
-      const backup = createLocalBackup(window.localStorage, '1.9.0');
+      const backup = createLocalBackup(window.localStorage, '1.10.0');
       const entryCount = Object.keys(backup.data).length;
       if (!entryCount) {
         showToast('Belum ada data Nurani yang bisa dicadangkan.');
@@ -1319,7 +1394,7 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
 
       <nav className="bottom-nav" aria-label="Navigasi utama">{NAV_ITEMS.map((item) => { const Icon = item.icon; const isActive = activeTab === item.id; return <a key={item.id} href={TAB_PATHS[item.id]} className={`nav-item ${isActive ? 'active' : ''}`} onClick={(event) => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return; event.preventDefault(); setActiveDuaSlug(null); setActiveTab(item.id); if (item.id !== 'quran') setSelectedSurah(null); }} aria-current={isActive ? 'page' : undefined}><span className="nav-icon-wrap"><Icon size={20} strokeWidth={isActive ? 2.4 : 1.8} /></span><span>{item.label}</span></a>; })}</nav>
 
-      {settingsOpen && <div className="modal-backdrop" onClick={() => setSettingsOpen(false)}><section className="modal-card settings-modal" onClick={(event) => event.stopPropagation()}><div className="modal-header"><div><p className="eyebrow">PENGATURAN</p><h2>Preferensi aplikasi</h2><p className="muted">Atur tampilan dan lindungi data tilawahmu.</p></div><button className="icon-button" onClick={() => setSettingsOpen(false)} aria-label="Tutup pengaturan"><X size={19} /></button></div><button className="settings-row" onClick={() => setTheme((value) => value === 'light' ? 'dark' : 'light')}><span className="settings-row-icon">{theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}</span><span><strong>Tampilan</strong><small>{theme === 'light' ? 'Mode terang' : 'Mode gelap'}</small></span><ChevronRight size={17} /></button><button className="settings-row" onClick={installApp}><span className="settings-row-icon"><Download size={18} /></span><span><strong>Pasang aplikasi</strong><small>Tambahkan Nurani ke layar utama</small></span><ChevronRight size={17} /></button><section className="backup-section"><div className="backup-section-heading"><span className="settings-row-icon"><ShieldCheck size={18} /></span><div><strong>Cadangkan & pulihkan data</strong><small>Bookmark, progres, posisi bacaan, favorit, pengaturan, dan catatan tadabbur.</small></div></div><div className="backup-actions"><button type="button" className="button button-secondary" onClick={exportLocalBackup}><Download size={16} /> Ekspor cadangan</button><button type="button" className="button button-gold" onClick={() => backupFileInputRef.current?.click()}><Upload size={16} /> Impor cadangan</button><input ref={backupFileInputRef} className="backup-file-input" type="file" accept=".json,application/json" onChange={importLocalBackup} aria-label="Pilih file cadangan Nurani" /></div><p className="backup-privacy-note">Cadangan dibuat sebagai file JSON yang tersimpan di perangkat. File ini dapat berisi catatan pribadi—simpan di tempat yang aman dan jangan membagikannya secara publik. Impor hanya memproses key Nurani yang dikenal (maks. 5 MB).</p></section><div className="settings-note"><ShieldCheck size={16} /><span>Data utama tetap disimpan lokal di perangkat ini. Katalog surah dan doa yang dapat diambil ulang tidak dimasukkan ke file cadangan.</span></div></section></div>}
+      {settingsOpen && <div className="modal-backdrop" onClick={() => setSettingsOpen(false)}><section className="modal-card settings-modal" onClick={(event) => event.stopPropagation()}><div className="modal-header"><div><p className="eyebrow">PENGATURAN</p><h2>Preferensi aplikasi</h2><p className="muted">Atur tampilan dan lindungi data tilawahmu.</p></div><button className="icon-button" onClick={() => setSettingsOpen(false)} aria-label="Tutup pengaturan"><X size={19} /></button></div><button className="settings-row" onClick={() => setTheme((value) => value === 'light' ? 'dark' : 'light')}><span className="settings-row-icon">{theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}</span><span><strong>Tampilan</strong><small>{theme === 'light' ? 'Mode terang' : 'Mode gelap'}</small></span><ChevronRight size={17} /></button><button className="settings-row" onClick={installApp}><span className="settings-row-icon"><Download size={18} /></span><span><strong>Pasang aplikasi</strong><small>Tambahkan Nurani ke layar utama</small></span><ChevronRight size={17} /></button><section className="backup-section"><div className="backup-section-heading"><span className="settings-row-icon"><ShieldCheck size={18} /></span><div><strong>Cadangkan & pulihkan data</strong><small>Bookmark, progres, posisi bacaan, favorit, pengaturan, dan catatan tadabbur.</small></div></div><div className="backup-actions"><button type="button" className="button button-secondary" onClick={exportLocalBackup}><Download size={16} /> Ekspor cadangan</button><button type="button" className="button button-gold" onClick={() => backupFileInputRef.current?.click()}><Upload size={16} /> Impor cadangan</button><input ref={backupFileInputRef} className="backup-file-input" type="file" accept=".json,application/json" onChange={importLocalBackup} aria-label="Pilih file cadangan Nurani" /></div><p className="backup-privacy-note">Cadangan dibuat sebagai file JSON yang tersimpan di perangkat. File ini dapat berisi catatan pribadi—simpan di tempat yang aman dan jangan membagikannya secara publik. Impor hanya memproses key Nurani yang dikenal (maks. 5 MB).</p></section><section className="offline-manager-section"><button type="button" className="offline-manager-toggle" aria-expanded={offlineManagerExpanded} onClick={() => { const next = !offlineManagerExpanded; setOfflineManagerExpanded(next); if (next) void refreshOfflineStorage(); }}><span className="settings-row-icon">{online ? <Download size={18} /> : <WifiOff size={18} />}</span><span className="offline-manager-toggle-copy"><strong>Kelola konten offline</strong><small>{offlineSurahs.length} surah ditandai · {formatStorageBytes(offlineStorageStats.pinnedBytes)} data ayat</small></span>{offlineManagerExpanded ? <ChevronDown size={17} /> : <ChevronRight size={17} />}</button>{offlineManagerExpanded && <div className="offline-manager-body"><div className="offline-stats-grid"><div className="offline-stat"><span>Cache ayat lokal</span><strong>{offlineStorageStats.cachedSurahIds.length} surah</strong><small>{formatStorageBytes(offlineStorageStats.cachedVerseBytes)}</small></div><div className="offline-stat"><span>Penyimpanan origin</span><strong>{offlineStorageStats.originUsage === null ? 'Tidak tersedia' : formatStorageBytes(offlineStorageStats.originUsage)}</strong><small>{offlineStorageStats.originQuota === null ? 'Estimasi browser tidak didukung' : `Dari ${formatStorageBytes(offlineStorageStats.originQuota)} yang diizinkan`}</small></div></div>{offlineStorageStats.missingPinnedSurahIds.length > 0 && <p className="offline-manager-warning"><WifiOff size={14} /> {offlineStorageStats.missingPinnedSurahIds.length} surah ditandai offline tetapi data ayatnya tidak ditemukan. Simpan ulang surah saat online.</p>}{offlineSurahs.length > 0 ? <div className="offline-manager-list">{offlineSurahs.map((id) => { const surah = surahs.find((item) => Number(item.nomor) === Number(id)) || fallbackSurahs[Number(id) - 1]; const rows = offlineStorageStats.cachedVerseCounts[Number(id)] || 0; return <div className="offline-manager-item" key={id}><span className="offline-manager-book"><BookOpen size={16} /></span><div className="offline-manager-item-copy"><strong>{surah?.namaLatin || `Surah ${id}`}</strong><small>{rows ? `${rows} ayat tersimpan · ${formatStorageBytes(offlineStorageStats.cachedSurahBytes[Number(id)] || 0)}` : 'Data ayat perlu disimpan ulang'}</small></div><button type="button" className="icon-button small" aria-label={`Buka ${surah?.namaLatin || `Surah ${id}`}`} title="Buka surah" onClick={() => { setSettingsOpen(false); void openSurah(surah, 1); }}><ArrowRight size={15} /></button><button type="button" className="icon-button small offline-remove-button" aria-label={`Hapus ${surah?.namaLatin || `Surah ${id}`} dari data offline`} title="Hapus data offline" onClick={() => removeOfflineSurah(id)}><Trash2 size={14} /></button></div>; })}</div> : <div className="offline-manager-empty"><WifiOff size={18} /><span>Belum ada surah yang ditandai untuk akses offline. Buka surah saat terhubung internet lalu tekan <strong>Simpan offline</strong>.</span></div>}<button type="button" className="button button-danger-ghost offline-clear-button" onClick={clearOfflineQuranData} disabled={offlineStorageStats.cachedSurahIds.length === 0 && offlineSurahs.length === 0}><Trash2 size={14} /> Hapus semua cache ayat</button><p className="offline-manager-note">Estimasi penyimpanan berasal dari browser dan dapat mencakup cache serta data Nurani lain di origin yang sama. Catatan, bookmark, progres, dan file cadangan tidak ikut dihapus saat cache ayat dibersihkan.</p><button type="button" className="text-link offline-refresh-button" onClick={() => void refreshOfflineStorage()}><RefreshCw size={13} /> Perbarui informasi penyimpanan</button></div>}</section><div className="settings-note"><ShieldCheck size={16} /><span>Data utama tetap disimpan lokal di perangkat ini. Katalog surah dan doa yang dapat diambil ulang tidak dimasukkan ke file cadangan.</span></div></section></div>}
 
       {verseNotesModalOpen && <div className="modal-backdrop" onClick={() => setVerseNotesModalOpen(false)}><section className="modal-card verse-notes-modal" onClick={(event) => event.stopPropagation()}><div className="modal-header"><div><p className="eyebrow">CATATAN PRIBADI</p><h2>Semua catatan tadabbur</h2><p className="muted">{allVerseNotes.length} catatan tersimpan di perangkat ini.</p></div><button className="icon-button" onClick={() => setVerseNotesModalOpen(false)} aria-label="Tutup catatan"><X size={19} /></button></div><div className="verse-notes-modal-list">{allVerseNotes.map((note) => <div className="verse-notes-modal-item" key={`${note.surahId}:${note.verseNumber}`}><div className="verse-notes-modal-item-copy"><strong>{note.surahName} · Ayat {note.verseNumber}</strong><p>{note.text}</p><small>{new Date(note.updatedAt || Date.now()).toLocaleString('id-ID')}</small></div><div className="verse-notes-modal-item-actions"><button type="button" className="icon-button small" aria-label={`Buka ${note.surahName} ayat ${note.verseNumber}`} onClick={() => openVerseFromNote(note)}><ArrowRight size={16} /></button><button type="button" className="icon-button small note-delete-action" aria-label={`Hapus catatan ${note.surahName} ayat ${note.verseNumber}`} onClick={() => deleteVerseNote(`${note.surahId}:${note.verseNumber}`)}><Trash2 size={15} /></button></div></div>)}</div><div className="modal-footnote"><ShieldCheck size={15} /><span>Catatan hanya disimpan pada browser/perangkat ini. Catatan tidak diunggah ke server dan tidak tersinkron otomatis ke perangkat lain.</span></div></section></div>}
 

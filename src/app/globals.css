@@ -499,6 +499,36 @@ h1, h2, h3, p { margin-top: 0; }
 .modal-footnote, .settings-note { display: flex; align-items: flex-start; gap: 9px; margin-top: 19px; padding: 13px; border-radius: 12px; color: var(--muted); background: var(--surface-muted); font-size: 10px; line-height: 1.65; }
 .modal-footnote svg, .settings-note svg { flex: 0 0 auto; margin-top: 1px; color: var(--emerald); }
 .settings-modal { width: min(100%, 500px); }
+
+.offline-manager-section { margin-top: 17px; overflow: hidden; border: 1px solid var(--line); border-radius: 17px; background: var(--surface-muted); }
+.offline-manager-toggle { display: flex; align-items: center; gap: 11px; width: 100%; min-height: 68px; padding: 12px 14px; border: 0; color: var(--ink); background: transparent; text-align: left; }
+.offline-manager-toggle > svg { flex: 0 0 auto; color: var(--muted); }
+.offline-manager-toggle-copy { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 5px; }
+.offline-manager-toggle-copy strong { font-size: 12px; }
+.offline-manager-toggle-copy small { color: var(--muted); font-size: 10px; line-height: 1.55; }
+.offline-manager-body { padding: 0 14px 15px; }
+.offline-stats-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0 0 13px; }
+.offline-stat { display: flex; min-width: 0; flex-direction: column; gap: 5px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.offline-stat > span { color: var(--muted); font-size: 9px; }
+.offline-stat strong { overflow-wrap: anywhere; font-size: 15px; letter-spacing: -.035em; }
+.offline-stat small { color: var(--muted); font-size: 9px; line-height: 1.55; }
+.offline-manager-list { display: flex; flex-direction: column; max-height: 260px; overflow: auto; border: 1px solid var(--line); border-radius: 13px; background: var(--surface); overscroll-behavior: contain; }
+.offline-manager-item { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 9px; border-bottom: 1px solid var(--line); }
+.offline-manager-item:last-child { border-bottom: 0; }
+.offline-manager-book { display: grid; place-items: center; width: 32px; height: 32px; flex: 0 0 auto; border-radius: 10px; color: var(--emerald); background: var(--emerald-pale); }
+.offline-manager-item-copy { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 4px; }
+.offline-manager-item-copy strong { overflow: hidden; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.offline-manager-item-copy small { color: var(--muted); font-size: 8px; line-height: 1.45; }
+.offline-remove-button { color: #b42332 !important; }
+.offline-manager-empty { display: flex; align-items: flex-start; gap: 9px; padding: 13px; border: 1px dashed var(--line); border-radius: 13px; color: var(--muted); font-size: 10px; line-height: 1.7; background: var(--surface); }
+.offline-manager-empty svg { flex: 0 0 auto; margin-top: 1px; }
+.offline-manager-empty strong { color: var(--ink); }
+.offline-manager-warning { display: flex; align-items: flex-start; gap: 7px; margin: 0 0 12px; padding: 10px; border-radius: 10px; color: #a36a12; background: color-mix(in srgb, #e4a23a 12%, var(--surface)); font-size: 9px; line-height: 1.6; }
+.offline-manager-warning svg { flex: 0 0 auto; margin-top: 1px; }
+.offline-clear-button { display: flex; width: 100%; min-height: 40px; justify-content: center; margin-top: 12px; font-size: 10px; }
+.offline-clear-button:disabled { opacity: .45; cursor: not-allowed; }
+.offline-manager-note { margin: 10px 0 0; color: var(--muted); font-size: 9px; line-height: 1.7; }
+.offline-refresh-button { min-height: 35px; margin-top: 4px; font-size: 9px; }
 .backup-section { margin-top: 17px; padding: 15px; border: 1px solid var(--line); border-radius: 17px; background: var(--surface-muted); }
 .backup-section-heading { display: flex; align-items: flex-start; gap: 11px; }
 .backup-section-heading > div { display: flex; flex-direction: column; gap: 5px; }
@@ -834,3 +864,11 @@ h1, h2, h3, p { margin-top: 0; }
 .system-feedback-footnote { display: block; max-width: 360px; margin: 21px auto 0; }
 
 @media (max-width: 480px) { .backup-actions { flex-direction: column; } .backup-actions .button { width: 100%; flex-basis: auto; } }
+
+@media (max-width: 640px) {
+  .offline-stats-grid { grid-template-columns: 1fr 1fr; }
+  .offline-manager-body { padding-right: 10px; padding-left: 10px; }
+  .offline-manager-toggle { padding-right: 10px; padding-left: 10px; }
+  .offline-stat { padding: 10px; }
+  .offline-stat strong { font-size: 13px; }
+}
