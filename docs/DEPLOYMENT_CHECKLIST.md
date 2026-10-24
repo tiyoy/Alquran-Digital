@@ -110,3 +110,11 @@ Pastikan `.env.local` atau secret pribadi tidak ikut di-commit. Endpoint `NEXT_P
 - [ ] Periksa title, description, canonical, dan Open Graph pada HTML untuk setidaknya tiga surah berbeda.
 - [ ] Pastikan sitemap mencakup 114 URL surah ditambah lima halaman utama (119 total).
 - [ ] Setelah membuka satu surah secara online, uji URL yang sama ketika offline.
+
+
+## Pemeriksaan tambahan v1.5.0
+
+- [ ] Uji slider ukuran teks Latin pada ukuran minimum, tengah, dan maksimum; pastikan nilai tersimpan setelah refresh.
+- [ ] Uji Reset khatam: konfirmasi membatalkan tidak mengubah data; konfirmasi menerima menghapus progres keseluruhan/harian dan mengembalikan target ke 30 hari.
+- [ ] Pastikan bookmark dan posisi bacaan terakhir tetap ada setelah reset khatam.
+- [ ] Pastikan service worker versi `nurani-pwa-v13` mengambil aset deployment terbaru.

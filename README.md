@@ -301,3 +301,10 @@ Saat ini repository belum menyertakan file `LICENSE`. Tentukan lisensi yang sesu
 ## Catatan perbaikan katalog doa
 
 Katalog doa menormalkan urutan berdasarkan ID numerik yang tersedia dan memastikan **Doa sebelum makan** berada sebelum **Doa sesudah makan**. Entri khusus **Membaca basmalah sebelum makan** dikecualikan berdasarkan judul yang dinormalisasi secara tepat, tanpa menyaring doa lain yang memuat kata serupa. Katalog API atau cache yang hanya berisi satu/terlalu sedikit doa dianggap tidak lengkap dan tidak boleh menggantikan daftar yang tersedia. Service worker memakai versi cache terbaru.
+
+
+## Pembaruan v1.5.0
+
+- Slider ukuran teks Latin/transliterasi pada pengaturan bacaan (12–30 px), tersimpan di perangkat dan dipulihkan setelah aplikasi dibuka kembali.
+- Tombol **Reset khatam** dengan konfirmasi, menghapus progres ayat dan catatan harian serta mengembalikan target ke 30 hari. Bookmark dan posisi bacaan terakhir tetap dipertahankan.
+- Cache service worker dinaikkan ke `nurani-pwa-v13` agar aset terbaru tidak tertahan oleh cache lama.

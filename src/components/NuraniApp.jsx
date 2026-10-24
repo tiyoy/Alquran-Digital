@@ -244,6 +244,7 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
   const [latinVisible, setLatinVisible] = useState(true);
   const [translationVisible, setTranslationVisible] = useState(true);
   const [arabicSize, setArabicSize] = useState(32);
+  const [latinSize, setLatinSize] = useState(18);
   const [translationSize, setTranslationSize] = useState(15);
   const [readerSettingsOpen, setReaderSettingsOpen] = useState(false);
   const [qariIndex, setQariIndex] = useState(0);
@@ -352,6 +353,7 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
       setLatinVisible(prefs.latinVisible !== false);
       setTranslationVisible(prefs.translationVisible !== false);
       setArabicSize(Number(prefs.arabicSize) || 32);
+      setLatinSize(Math.min(30, Math.max(12, Number(prefs.latinSize) || 18)));
       setTranslationSize(Number(prefs.translationSize) || 15);
       setQariIndex(Number(prefs.qariIndex) || 0);
     }
@@ -577,8 +579,8 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
     writeLocal('aq:favorite-asma', favoriteAsma);
   }, [favoriteAsma]);
   useEffect(() => {
-    writeLocal('aq:reader-prefs', { arabicVisible, latinVisible, translationVisible, arabicSize, translationSize, qariIndex });
-  }, [arabicVisible, latinVisible, translationVisible, arabicSize, translationSize, qariIndex]);
+    writeLocal('aq:reader-prefs', { arabicVisible, latinVisible, translationVisible, arabicSize, latinSize, translationSize, qariIndex });
+  }, [arabicVisible, latinVisible, translationVisible, arabicSize, latinSize, translationSize, qariIndex]);
   useEffect(() => {
     if (!audioInfo || !audioRef.current) return;
     const element = audioRef.current;
@@ -855,7 +857,7 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
     else showToast('Gunakan menu browser “Instal aplikasi” atau “Tambahkan ke layar utama”.');
   };
   const resetReaderSettings = () => {
-    setArabicVisible(true); setLatinVisible(true); setTranslationVisible(true); setArabicSize(32); setTranslationSize(15);
+    setArabicVisible(true); setLatinVisible(true); setTranslationVisible(true); setArabicSize(32); setLatinSize(18); setTranslationSize(15);
     showToast('Pengaturan bacaan dikembalikan ke awal.');
   };
 
@@ -894,6 +896,7 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
           <div className="khatam-stats"><div><strong>{completedVerseCount.toLocaleString('id-ID')}</strong><span>ayat ditandai dibaca</span></div><div><strong>{overallReadingPercent}%</strong><span>progres keseluruhan</span></div></div>
           <div className="progress-track" role="progressbar" aria-label="Progres membaca Al-Qur’an" aria-valuemin={0} aria-valuemax={100} aria-valuenow={overallReadingPercent}><span style={{ width: `${overallReadingPercent}%` }} /></div>
           <div className="khatam-target-row"><span>Target khatam</span><div className="goal-options" role="group" aria-label="Pilih target khatam">{KHATAM_OPTIONS.map((days) => <button key={days} type="button" className={khatamDays === days ? 'active' : ''} onClick={() => setKhatamDays(days)} aria-pressed={khatamDays === days}>{days} hari</button>)}</div></div>
+          <div className="khatam-reset-row"><span>Mulai ulang perhitungan progres membaca tanpa menghapus bookmark atau posisi bacaan terakhir.</span><button type="button" className="button button-glass khatam-reset-button" onClick={() => { if (window.confirm('Reset progres khatam? Progres keseluruhan dan catatan bacaan harian akan dihapus, target kembali ke 30 hari. Bookmark dan posisi bacaan terakhir tetap tersimpan.')) { setReadVerseKeys([]); setReadingDays({}); setKhatamDays(30); showToast('Progres khatam berhasil direset.'); } }}><RefreshCw size={14} /> Reset khatam</button></div>
           <div className="daily-target-heading"><div><strong>{todayReadCount.toLocaleString('id-ID')} / {dailyVerseTarget.toLocaleString('id-ID')} ayat hari ini</strong><small>Target harian untuk khatam dalam {khatamDays} hari</small></div><span>{dailyReadingPercent}%</span></div>
           <div className="progress-track progress-track-daily" role="progressbar" aria-label="Progres target membaca hari ini" aria-valuemin={0} aria-valuemax={100} aria-valuenow={dailyReadingPercent}><span style={{ width: `${dailyReadingPercent}%` }} /></div>
           <p className="progress-footnote">Progres berdasarkan ayat yang terlihat saat membaca. Data disimpan lokal dan tidak memerlukan akun.</p>
@@ -988,7 +991,7 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
           <label className="toggle-setting"><span><strong>Latin</strong><small>Transliterasi</small></span><input type="checkbox" checked={latinVisible} onChange={(event) => setLatinVisible(event.target.checked)} /><span className="toggle-ui" /></label>
           <label className="toggle-setting"><span><strong>Terjemahan</strong><small>Bahasa Indonesia</small></span><input type="checkbox" checked={translationVisible} onChange={(event) => setTranslationVisible(event.target.checked)} /><span className="toggle-ui" /></label>
         </div>
-        <div className="font-settings-row"><div><div className="range-label"><span>Ukuran teks Arab</span><strong>{arabicSize}px</strong></div><input type="range" min="20" max="52" value={arabicSize} onChange={(event) => setArabicSize(Number(event.target.value))} /></div><div><div className="range-label"><span>Ukuran terjemahan</span><strong>{translationSize}px</strong></div><input type="range" min="12" max="24" value={translationSize} onChange={(event) => setTranslationSize(Number(event.target.value))} /></div></div>
+        <div className="font-settings-row"><div><div className="range-label"><span>Ukuran teks Arab</span><strong>{arabicSize}px</strong></div><input type="range" min="20" max="52" value={arabicSize} onChange={(event) => setArabicSize(Number(event.target.value))} aria-label="Ukuran teks Arab" /></div><div><div className="range-label"><span>Ukuran teks Latin</span><strong>{latinSize}px</strong></div><input type="range" min="12" max="30" value={latinSize} onChange={(event) => setLatinSize(Number(event.target.value))} aria-label="Ukuran teks Latin" /></div><div><div className="range-label"><span>Ukuran terjemahan</span><strong>{translationSize}px</strong></div><input type="range" min="12" max="24" value={translationSize} onChange={(event) => setTranslationSize(Number(event.target.value))} aria-label="Ukuran terjemahan" /></div></div>
         <button className="text-link reset-reader" onClick={resetReaderSettings}>Kembalikan pengaturan awal <RefreshCw size={14} /></button>
       </section>}
       <div className="reader-tool-row">
@@ -1005,7 +1008,7 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
           return <article id={`verse-${selectedSurah?.nomor}-${verse.nomorAyat}`} className={`verse-card card-surface ${isPlayingVerse ? 'is-playing' : ''}`} key={`${selectedSurah?.nomor}-${verse.nomorAyat}`}>
             <div className="verse-card-top"><div className="verse-number"><span>{verse.nomorAyat}</span></div><div className="verse-meta"><span>{selectedSurah?.namaLatin} · Ayat {verse.nomorAyat}</span>{isPlayingVerse && <span className="now-playing"><AudioLines size={13} /> Sedang diputar</span>}</div><div className="verse-quick-actions"><button className="icon-button small" aria-label="Putar ayat" onClick={() => playVerse(verse, index)}>{isPlayingVerse && audioPlaying ? <AudioLines size={16} /> : <Play size={16} />}</button><button className={`icon-button small ${bookmarkedVerses.includes(verseKey) ? 'is-saved' : ''}`} aria-label="Bookmark ayat" onClick={() => toggleVerseBookmark(verse.nomorAyat)}><Bookmark size={16} fill={bookmarkedVerses.includes(verseKey) ? 'currentColor' : 'none'} /></button><button className="icon-button small" aria-label="Salin ayat" onClick={() => copyVerse(verse)}><Copy size={15} /></button><button className="icon-button small tafsir-action" aria-label="Buka tafsir ayat" onClick={() => openTafsir(verse)}><MoreHorizontal size={17} /></button></div></div>
             {arabicVisible && <p className="verse-arabic" dir="rtl" lang="ar" style={{ fontSize: `${arabicSize}px` }}>{cleanArabicText(verse.teksArab) || '—'}</p>}
-            {latinVisible && verse.teksLatin && <p className="verse-latin">{verse.teksLatin}</p>}
+            {latinVisible && verse.teksLatin && <p className="verse-latin" style={{ fontSize: `${latinSize}px` }}>{verse.teksLatin}</p>}
             {translationVisible && verse.teksIndonesia && <p className="verse-translation" style={{ fontSize: `${translationSize}px` }}>{verse.teksIndonesia}</p>}
             {!arabicVisible && !latinVisible && !translationVisible && <div className="hifz-hidden-note"><EyeOffIcon /> Mode hafalan aktif — semua teks disembunyikan.</div>}
             {translationVisible && verse.teksIndonesia && <button className="text-link verse-tafsir-link" onClick={() => openTafsir(verse)}>Baca tafsir ayat <ArrowRight size={14} /></button>}
