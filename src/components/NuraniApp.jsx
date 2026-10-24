@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { asmaulHusna, enforceBeforeMealDua, fallbackDuas, fallbackSurahs, MIN_DUA_CATALOG_SIZE } from '@/lib/data';
 import { extractDuaRows, isUsableDua, normalizeDua } from '@/lib/duas';
+import { QURAN_SEARCH_FIELD_LABELS, QURAN_SEARCH_MODES, findCachedVerseSearchResults } from '@/lib/quran-search';
 import { getDuaPath, getDuaSlug, getDuaSlugFromPathname } from '@/lib/dua-routes';
 import { PATH_TABS, SECTION_SEO_BY_TAB, TAB_PATHS, VALID_TABS } from '@/lib/section-routes';
 import { getSurahNumberFromPathname, getSurahPath, getVerseNumberFromPathname, getVersePath } from '@/lib/surah-routes';
@@ -45,6 +46,7 @@ const QARI_IDS = ['05', '03', '01', '02', '04', '06'];
 const NAV_ITEMS = [
   { id: 'home', label: 'Beranda', icon: Home },
   { id: 'quran', label: 'Al-Qur’an', icon: BookOpen },
+  { id: 'search', label: 'Cari', icon: Search },
   { id: 'prayer', label: 'Shalat', icon: Clock3 },
   { id: 'duas', label: 'Doa', icon: HandHeart },
   { id: 'asma', label: 'Asmaul', icon: Sparkles }
@@ -225,6 +227,15 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
   const [surahLoading, setSurahLoading] = useState(true);
   const [surahQuery, setSurahQuery] = useState('');
   const [surahFilter, setSurahFilter] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchMode, setSearchMode] = useState('all');
+  const [searchSurahFilter, setSearchSurahFilter] = useState('all');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchStatus, setSearchStatus] = useState('idle');
+  const [searchError, setSearchError] = useState('');
+  const [searchRetryCount, setSearchRetryCount] = useState(0);
+  const [searchOfflineResults, setSearchOfflineResults] = useState(false);
+  const [searchVisibleCount, setSearchVisibleCount] = useState(20);
   const [selectedSurah, setSelectedSurah] = useState(initialSurahMetadata);
   const [sharedVerseTarget] = useState(safeInitialVerseNumber);
   const [verses, setVerses] = useState(safeInitialVerseRows);
@@ -751,6 +762,62 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
   }, []);
 
   const upcomingPrayer = useMemo(() => getUpcomingPrayer(prayerSchedule, prayerTimezone), [prayerSchedule, prayerTimezone, clockTick]);
+  useEffect(() => {
+    if (activeTab !== 'search') return undefined;
+    const query = searchQuery.trim();
+    if (query.length < 2) {
+      setSearchResults([]);
+      setSearchStatus('idle');
+      setSearchError('');
+      setSearchOfflineResults(false);
+      return undefined;
+    }
+
+    let cancelled = false;
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setSearchStatus('loading');
+      setSearchError('');
+      setSearchOfflineResults(false);
+      try {
+        if (navigator.onLine === false) throw new Error('offline');
+        const params = new URLSearchParams({ q: query, type: searchMode, surah: searchSurahFilter });
+        const response = await fetch(`/api/quran-search?${params.toString()}`, { signal: controller.signal, headers: { Accept: 'application/json' } });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || payload?.ok !== true) throw new Error(payload?.message || 'Pencarian belum berhasil. Coba lagi.');
+        if (cancelled) return;
+        setSearchResults(Array.isArray(payload.results) ? payload.results : []);
+        setSearchError(payload.partial ? 'Sebagian sumber pencarian tidak merespons. Hasil yang tersedia tetap ditampilkan.' : '');
+        setSearchOfflineResults(false);
+        setSearchStatus('success');
+        setSearchVisibleCount(20);
+      } catch (error) {
+        if (cancelled || error?.name === 'AbortError') return;
+        const cachedResults = findCachedVerseSearchResults(query, searchMode, window.localStorage, fallbackSurahs, searchSurahFilter);
+        if (cachedResults.length) {
+          setSearchResults(cachedResults);
+          setSearchOfflineResults(true);
+          setSearchError('Koneksi ke sumber pencarian tidak tersedia. Hasil berikut hanya berasal dari surah yang tersimpan di perangkat.');
+          setSearchStatus('success');
+        } else {
+          setSearchResults([]);
+          setSearchOfflineResults(false);
+          setSearchError(error?.message === 'offline'
+            ? 'Sedang offline dan belum ada ayat tersimpan yang cocok dengan pencarian ini.'
+            : (error?.message || 'Pencarian gagal. Periksa koneksi lalu coba lagi.'));
+          setSearchStatus('error');
+        }
+        setSearchVisibleCount(20);
+      }
+    }, 350);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [activeTab, searchQuery, searchMode, searchSurahFilter, searchRetryCount]);
+
   const filteredSurahs = useMemo(() => {
     return surahs.filter((surah) => {
       const query = surahQuery.trim().toLowerCase();
@@ -899,9 +966,11 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
     setBookmarkedSurahs((previous) => previous.includes(number) ? previous.filter((id) => id !== number) : [...previous, number]);
     showToast(bookmarkedSurahs.includes(number) ? 'Bookmark surah dihapus.' : 'Surah disimpan ke bookmark.');
   };
-  const toggleVerseBookmark = (number) => {
-    if (!selectedSurah) return;
-    const key = `${selectedSurah.nomor}:${number}`;
+  const toggleVerseBookmark = (number, targetSurahNumber = selectedSurah?.nomor) => {
+    const surahNumber = Number(targetSurahNumber);
+    const verseNumber = Number(number);
+    if (!Number.isInteger(surahNumber) || surahNumber < 1 || surahNumber > 114 || !Number.isInteger(verseNumber) || verseNumber < 1) return;
+    const key = `${surahNumber}:${verseNumber}`;
     setBookmarkedVerses((previous) => previous.includes(key) ? previous.filter((id) => id !== key) : [...previous, key]);
     showToast(bookmarkedVerses.includes(key) ? 'Bookmark ayat dihapus.' : 'Ayat disimpan ke bookmark.');
   };
@@ -1541,6 +1610,37 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
       try { await audioRef.current.play(); setAudioPlaying(true); } catch { showToast('Audio belum bisa diputar.'); }
     } else { audioRef.current.pause(); setAudioPlaying(false); }
   };
+  const shareSearchResult = async (result) => {
+    if (!result?.surahNumber || !result?.verseNumber) return;
+    const path = getVersePath(result.surahNumber, result.verseNumber);
+    const url = new URL(path, window.location.origin).toString();
+    const reference = `${result.surahName} · Ayat ${result.verseNumber}`;
+    const excerpts = (result.matches || []).slice(0, 3).map((item) => `${item.label}: ${item.text}`);
+    const text = [reference, ...excerpts].join('\n\n');
+    try {
+      if (typeof navigator.share === 'function') {
+        await navigator.share({ title: `${reference} — Nurani`, text, url });
+        return;
+      }
+      const shareText = `${text}\n\nBaca ayat ini di Nurani: ${url}`;
+      if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(shareText);
+      else {
+        const field = document.createElement('textarea');
+        field.value = shareText;
+        field.setAttribute('readonly', '');
+        field.style.position = 'fixed';
+        field.style.opacity = '0';
+        document.body.appendChild(field);
+        field.select();
+        document.execCommand('copy');
+        field.remove();
+      }
+      showToast('Tautan dan cuplikan ayat disalin.');
+    } catch (error) {
+      if (error?.name !== 'AbortError') showToast('Ayat belum dapat dibagikan dari browser ini.');
+    }
+  };
+
   const copyVerse = async (verse) => {
     const text = [verse.teksArab, verse.teksLatin, verse.teksIndonesia].filter(Boolean).join('\n\n');
     try { await navigator.clipboard.writeText(text); showToast('Teks ayat disalin.'); }
@@ -1869,9 +1969,54 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
     </div>
   );
 
+  const renderSearch = () => {
+    const visibleResults = searchResults.slice(0, searchVisibleCount);
+    const hasQuery = searchQuery.trim().length >= 2;
+    return (
+      <div className="page-stack quran-search-page">
+        <section className="page-title-row"><div><p className="eyebrow">TEMUKAN AYAT</p><h1>Pencarian Al-Qur’an</h1><p className="muted">Cari berdasarkan teks Arab, terjemahan Indonesia, atau transliterasi Latin.</p></div><div className="page-title-icon quran-search-title-icon"><Search size={24} /></div></section>
+        <section className="quran-search-panel card-surface">
+          <form className="quran-search-form search-box" onSubmit={(event) => { event.preventDefault(); setSearchQuery((value) => value.trim()); setSearchRetryCount((count) => count + 1); setSearchVisibleCount(20); }}>
+            <Search size={19} aria-hidden="true" />
+            <input type="search" value={searchQuery} onChange={(event) => { setSearchQuery(event.target.value); setSearchVisibleCount(20); }} placeholder="Contoh: sabar, bismillah, الرَّحْمَٰن…" aria-label="Cari teks ayat Al-Qur’an" autoComplete="off" />
+            {searchQuery && <button type="button" aria-label="Hapus kata pencarian" onClick={() => { setSearchQuery(''); setSearchResults([]); setSearchStatus('idle'); setSearchError(''); }}><X size={16} /></button>}
+            <button type="submit" className="quran-search-submit" aria-label="Cari ayat"><ArrowRight size={17} /></button>
+          </form>
+          <div className="filter-chips quran-search-modes" role="group" aria-label="Pilih bahasa pencarian">
+            {Object.entries(QURAN_SEARCH_MODES).map(([value, option]) => <button type="button" key={value} className={`filter-chip ${searchMode === value ? 'active' : ''}`} aria-pressed={searchMode === value} onClick={() => { setSearchMode(value); setSearchVisibleCount(20); }}>{option.label}</button>)}
+          </div>
+          <div className="quran-search-filter-row"><label htmlFor="quran-search-surah">Batasi ke surah</label><select id="quran-search-surah" value={searchSurahFilter} onChange={(event) => { setSearchSurahFilter(event.target.value); setSearchVisibleCount(20); }}><option value="all">Semua surah</option>{fallbackSurahs.map((surah) => <option value={String(surah.nomor)} key={surah.nomor}>{surah.nomor}. {surah.namaLatin}</option>)}</select></div>
+          <div className="quran-search-suggestions"><span>Coba kata kunci:</span>{['sabar', 'rahmat', 'Bismi Allahi', 'الرَّحْمَٰن'].map((term) => <button type="button" key={term} onClick={() => { setSearchQuery(term); setSearchRetryCount((count) => count + 1); setSearchVisibleCount(20); }}>{term}</button>)}</div>
+        </section>
+
+        <div className="quran-search-status-row" aria-live="polite">
+          <span>{searchStatus === 'loading' ? <><LoaderCircle size={14} className="spin" /> Sedang mencari ayat…</> : searchStatus === 'success' ? `${searchResults.length} hasil${searchOfflineResults ? ' · data lokal' : ''}` : searchStatus === 'error' ? 'Pencarian belum berhasil' : hasQuery ? 'Siap mencari' : 'Masukkan kata kunci untuk memulai'}</span>
+          {searchStatus === 'success' && searchResults.length > 0 && <span>Diurutkan berdasarkan surah dan ayat</span>}
+        </div>
+        {searchError && <div className={`inline-notice quran-search-notice ${searchOfflineResults ? 'is-offline' : ''}`}><Info size={16} /><span>{searchError}</span>{searchStatus === 'error' && <button type="button" onClick={() => setSearchRetryCount((count) => count + 1)}><RefreshCw size={14} /> Coba lagi</button>}</div>}
+        {searchStatus === 'idle' && <div className="empty-state card-surface"><div className="empty-icon"><Search size={22} /></div><strong>Temukan ayat yang kamu cari</strong><p>Masukkan minimal dua karakter. Pilih jenis pencarian agar hasil lebih sesuai dengan kata kunci.</p></div>}
+        {searchStatus === 'loading' && <div className="quran-search-loading card-surface"><LoaderCircle className="spin" size={22} /><span>Mencari pada teks Arab, terjemahan, dan transliterasi…</span></div>}
+        {searchStatus === 'success' && searchResults.length === 0 && <div className="empty-state card-surface"><div className="empty-icon"><Search size={22} /></div><strong>Ayat belum ditemukan</strong><p>Coba kata lain, periksa ejaan, atau ganti jenis pencarian.</p><button type="button" className="button button-secondary" onClick={() => { setSearchMode('all'); setSearchSurahFilter('all'); }}>Hapus filter</button></div>}
+        {searchStatus === 'success' && visibleResults.length > 0 && <div className="quran-search-results">
+          {visibleResults.map((result) => {
+            const bookmarkKey = `${result.surahNumber}:${result.verseNumber}`;
+            const isBookmarked = bookmarkedVerses.includes(bookmarkKey);
+            return <article className="quran-search-result card-surface" key={result.key}>
+              <div className="quran-search-result-top"><span className="quran-search-result-number">{result.surahNumber}:{result.verseNumber}</span><div className="quran-search-result-reference"><strong>{result.surahName}</strong><span>{result.surahArabicName}</span></div><button type="button" className={`icon-button small ${isBookmarked ? 'is-saved' : ''}`} aria-label={isBookmarked ? 'Hapus bookmark ayat' : 'Simpan bookmark ayat'} title={isBookmarked ? 'Hapus bookmark' : 'Simpan bookmark'} onClick={() => toggleVerseBookmark(result.verseNumber, result.surahNumber)}><Bookmark size={15} fill={isBookmarked ? 'currentColor' : 'none'} /></button></div>
+              <div className="quran-search-match-list">{result.matches.map((match) => <div className={`quran-search-match quran-search-match-${match.field}`} key={`${result.key}:${match.field}`}><span>{QURAN_SEARCH_FIELD_LABELS[match.field] || match.label}</span><p dir={match.field === 'arabic' ? 'rtl' : 'auto'} lang={match.field === 'arabic' ? 'ar' : 'id'}>{match.text}</p></div>)}</div>
+              <div className="quran-search-result-actions"><button type="button" className="button button-gold" onClick={() => void openSurah(result.surahNumber, result.verseNumber)}><BookOpen size={15} /> Buka ayat <ArrowRight size={14} /></button><button type="button" className="button button-secondary" onClick={() => void shareSearchResult(result)}><Share2 size={15} /> Bagikan</button></div>
+            </article>;
+          })}
+          {searchVisibleCount < searchResults.length && <button type="button" className="button button-secondary quran-search-more" onClick={() => setSearchVisibleCount((count) => count + 20)}>Tampilkan hasil berikutnya ({Math.min(20, searchResults.length - searchVisibleCount)}) <ChevronDown size={15} /></button>}
+        </div>}
+        <p className="source-note"><ShieldCheck size={15} /> Pencarian daring memakai teks Arab, terjemahan Bahasa Indonesia, dan transliterasi dari AlQuran.cloud. Saat offline, pencarian hanya mencakup ayat yang telah tersimpan pada perangkat ini.</p>
+      </div>
+    );
+  };
+
   const renderSurahList = () => (
     <div className="page-stack quran-list-page">
-      <section className="page-title-row"><div><p className="eyebrow">KITAB SUCI UMAT ISLAM</p><h1>Al-Qur’an</h1><p className="muted">Baca dan pahami ayat demi ayat.</p></div><div className="quran-count-pill"><BookOpen size={16} /><strong>114</strong><span>Surah</span></div></section>
+      <section className="page-title-row"><div><p className="eyebrow">KITAB SUCI UMAT ISLAM</p><h1>Al-Qur’an</h1><p className="muted">Baca dan pahami ayat demi ayat.</p></div><div className="quran-list-heading-actions"><button type="button" className="button button-secondary quran-search-shortcut" onClick={() => setActiveTab('search')}><Search size={15} /> Cari ayat</button><div className="quran-count-pill"><BookOpen size={16} /><strong>114</strong><span>Surah</span></div></div></section>
       <div className="quran-search search-box"><Search size={18} /><input value={surahQuery} onChange={(event) => setSurahQuery(event.target.value)} placeholder="Cari nama surah, arti, atau nomor…" aria-label="Cari surah" />{surahQuery && <button aria-label="Hapus pencarian" onClick={() => setSurahQuery('')}><X size={16} /></button>}</div>
       <div className="filter-chips" role="group" aria-label="Filter surah">
         {[['all','Semua'],['mekah','Makkiyah'],['madinah','Madaniyah'],['bookmarked','Bookmark'],['offline','Offline']].map(([value,label]) => <button key={value} className={`filter-chip ${surahFilter === value ? 'active' : ''}`} onClick={() => setSurahFilter(value)}>{value === 'bookmarked' && <Bookmark size={13} />}{value === 'offline' && <Download size={13} />}{label}{value === 'bookmarked' && bookmarkedSurahs.length > 0 ? ` (${bookmarkedSurahs.length})` : ''}{value === 'offline' && offlineSurahs.length > 0 ? ` (${offlineSurahs.length})` : ''}</button>)}
@@ -2106,6 +2251,7 @@ export default function HomePage({ initialTab = 'home', initialSurahNumber = nul
       <main className={`main-content ${audioInfo ? 'has-audio' : ''}`}>
         {activeTab === 'home' && renderHome()}
         {activeTab === 'quran' && (selectedSurah ? renderReader() : renderSurahList())}
+        {activeTab === 'search' && renderSearch()}
         {activeTab === 'prayer' && renderPrayer()}
         {activeTab === 'duas' && (activeDuaSlug ? renderDuaDetail() : renderDuas())}
         {activeTab === 'asma' && renderAsma()}

@@ -418,3 +418,7 @@ Lihat `PATCH-NOTES-v1.14.0.md` untuk kontrol playback rate, persistensi lokal, d
 - Service worker diperbarui ke `nurani-pwa-v26`, dan `/arah-kiblat` ditambahkan ke app shell.
 
 Sebelum deployment, jalankan `npm run lint` dan `npm run build`, lalu uji lokasi dan kompas pada ponsel fisik.
+
+## Pencarian Al-Qur’an terpadu (v1.18.0)
+
+Nurani kini menyediakan `/pencarian` untuk menelusuri teks Arab, terjemahan Indonesia, atau transliterasi Latin. Hasil dapat difilter berdasarkan surah, dibuka ke URL ayat langsung, disimpan ke bookmark, dan dibagikan. Pencarian Arab membersihkan harakat pada kata kunci ketika mencocokkannya dengan edisi Arab tanpa harakat. Saat offline, pencarian hanya menggunakan ayat yang telah tersimpan pada perangkat. Detail implementasi dan pengujian ada di `docs/QURAN-SEARCH.md`.

@@ -1,9 +1,9 @@
 /* Lightweight app-shell service worker for the Next.js App Router. */
-const SW_VERSION = 'nurani-pwa-v30';
+const SW_VERSION = 'nurani-pwa-v31';
 const APP_SHELL_CACHE = `${SW_VERSION}-shell`;
 const API_CACHE = `${SW_VERSION}-api`;
 const RUNTIME_CACHE = `${SW_VERSION}-runtime`;
-const APP_SHELL_URLS = ['/', '/quran', '/quran/1-al-fatihah', '/quran/1-al-fatihah/1', '/jadwal-shalat', '/doa', '/doa/1-doa-sebelum-makan', '/doa/2-doa-sesudah-makan', '/doa/3-doa-sebelum-tidur', '/doa/4-doa-bangun-tidur', '/doa/5-doa-memohon-kebaikan', '/asmaul-husna', '/arah-kiblat', '/offline.html', '/manifest.webmanifest', '/favicon.svg'];
+const APP_SHELL_URLS = ['/', '/pencarian', '/quran', '/quran/1-al-fatihah', '/quran/1-al-fatihah/1', '/jadwal-shalat', '/doa', '/doa/1-doa-sebelum-makan', '/doa/2-doa-sesudah-makan', '/doa/3-doa-sebelum-tidur', '/doa/4-doa-bangun-tidur', '/doa/5-doa-memohon-kebaikan', '/asmaul-husna', '/arah-kiblat', '/offline.html', '/manifest.webmanifest', '/favicon.svg'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
@@ -122,7 +122,7 @@ self.addEventListener('fetch', (event) => {
   // Framework and SEO metadata routes must bypass runtime caching. Otherwise a
   // direct navigation to robots.txt/sitemap.xml could be cached as the app shell.
   // Streamed audio downloads must stay network-only; never wrap/cache the large proxy response here.
-  if (url.origin === self.location.origin && url.pathname === '/api/audio-proxy') return;
+  if (url.origin === self.location.origin && (url.pathname === '/api/audio-proxy' || url.pathname === '/api/quran-search')) return;
 
   // Tajweed annotations are optional but may be cached after first use so the
   // last few annotated surahs can still be rendered offline by the client cache.

@@ -66,6 +66,18 @@
       ]
     },
     {
+      "name": "Cari Ayat Al-Qur’an",
+      "short_name": "Cari Ayat",
+      "url": "/pencarian",
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
       "name": "Arah Kiblat",
       "short_name": "Kiblat",
       "url": "/arah-kiblat",

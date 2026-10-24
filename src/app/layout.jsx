@@ -24,7 +24,8 @@ export const metadata = {
     'Arah kiblat online',
     'Kompas kiblat',
     'Warna tajwid digital',
-    'Belajar hukum tajwid Al-Qur’an'
+    'Belajar hukum tajwid Al-Qur’an',
+    'Pencarian Al-Qur’an Arab Latin dan terjemahan Indonesia'
   ],
   alternates: {
     canonical: '/'
@@ -105,7 +106,8 @@ const structuredData = {
     'Progres tilawah dan target khatam',
     'Dukungan Progressive Web App',
     'Arah kiblat dengan lokasi dan kompas perangkat',
-    'Warna tajwid berdasarkan anotasi edisi quran-tajweed'
+    'Warna tajwid berdasarkan anotasi edisi quran-tajweed',
+    'Pencarian ayat berdasarkan teks Arab, transliterasi Latin, dan terjemahan Indonesia'
   ]
 };
 

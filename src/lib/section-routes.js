@@ -16,6 +16,13 @@ export const SECTION_ROUTES = [
     keywords: ['baca Al-Qur’an online', 'Al-Qur’an terjemahan Indonesia', 'murottal']
   },
   {
+    tab: 'search',
+    path: '/pencarian',
+    title: 'Pencarian Al-Qur’an Arab, Latin, dan Terjemahan Indonesia',
+    description: 'Cari ayat Al-Qur’an berdasarkan teks Arab, transliterasi Latin, atau kata dalam terjemahan Indonesia. Buka dan bagikan ayat langsung dari hasil pencarian.',
+    keywords: ['pencarian Al-Qur’an', 'cari ayat Al-Qur’an', 'pencarian terjemahan Al-Qur’an', 'cari ayat Arab Latin']
+  },
+  {
     tab: 'prayer',
     path: '/jadwal-shalat',
     title: 'Jadwal Shalat Kabupaten Bogor dan Indonesia',
