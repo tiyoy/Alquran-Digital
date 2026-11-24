@@ -1,0 +1,32 @@
+{
+  "name": "Al-Qur'an Digital Indonesia",
+  "short_name": "Al-Qur'an ID",
+  "description": "Al-Qur'an Digital Indonesia dengan teks Arab Uthmani HD, Warna Tajwid, Mode Hafalan (Hifz), Tafsir Kemenag RI, Audio Murottal Offline 5 Qari, Jadwal Shalat, Kompas Kiblat, Tasbih, Doa Harian, dan 99 Asmaul Husna.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#071311",
+  "theme_color": "#059669",
+  "lang": "id",
+  "categories": ["books", "education", "lifestyle"],
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

@@ -1,0 +1,320 @@
+@import url('https://fonts.googleapis.com/css2?family=Amiri+Quran&family=Amiri:ital,wght@0,400;0,700;1,400&family=Noto+Naskh+Arabic:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Scheherazade+New:wght@400;500;600;700&display=swap');
+
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
+
+@layer base {
+  :root {
+    --yellow: #D97706;
+  }
+
+  /* Default Theme: Hijau Zamrud (Emerald) */
+  :root,
+  [data-color-theme='emerald'] {
+    --primary-50: 236 253 245;
+    --primary-100: 209 250 229;
+    --primary-200: 167 243 208;
+    --primary-300: 110 231 183;
+    --primary-400: 52 211 153;
+    --primary-500: 16 185 129;
+    --primary-600: 5 150 105;
+    --primary-700: 4 120 87;
+    --primary-800: 6 95 70;
+    --primary-900: 6 78 59;
+    --primary-950: 2 44 34;
+
+    --hero-end: 15 118 110;
+    --hero-end-dark: 4 47 46;
+
+    --theme-canvas: 246 250 248;
+    --theme-canvas-dark: 7 19 17;
+    --theme-surface-dark: 13 31 27;
+    --theme-surface-modal: 11 30 26;
+  }
+
+  /* Theme 2: Biru Safir (Masjid Biru) */
+  [data-color-theme='sapphire'] {
+    --primary-50: 240 249 255;
+    --primary-100: 224 242 254;
+    --primary-200: 186 230 253;
+    --primary-300: 125 211 252;
+    --primary-400: 56 189 248;
+    --primary-500: 56 189 248;
+    --primary-600: 2 132 199;
+    --primary-700: 3 105 161;
+    --primary-800: 7 89 133;
+    --primary-900: 12 74 110;
+    --primary-950: 8 47 73;
+
+    --hero-end: 29 78 216;
+    --hero-end-dark: 15 23 42;
+
+    --theme-canvas: 244 248 252;
+    --theme-canvas-dark: 7 14 24;
+    --theme-surface-dark: 13 26 43;
+    --theme-surface-modal: 10 23 39;
+  }
+
+  /* Theme 3: Nila Malam (Royal Indigo) */
+  [data-color-theme='indigo'] {
+    --primary-50: 238 242 255;
+    --primary-100: 224 231 255;
+    --primary-200: 199 210 254;
+    --primary-300: 165 180 252;
+    --primary-400: 129 140 248;
+    --primary-500: 129 140 248;
+    --primary-600: 79 70 229;
+    --primary-700: 67 56 202;
+    --primary-800: 55 48 163;
+    --primary-900: 49 46 129;
+    --primary-950: 30 27 75;
+
+    --hero-end: 109 40 217;
+    --hero-end-dark: 23 16 48;
+
+    --theme-canvas: 246 246 253;
+    --theme-canvas-dark: 10 11 24;
+    --theme-surface-dark: 18 20 42;
+    --theme-surface-modal: 15 17 36;
+  }
+
+  /* Theme 4: Cokelat Mushaf (Klasik Sepia) */
+  [data-color-theme='amber'] {
+    --primary-50: 255 251 235;
+    --primary-100: 254 243 199;
+    --primary-200: 253 230 138;
+    --primary-300: 252 211 77;
+    --primary-400: 251 191 36;
+    --primary-500: 245 158 11;
+    --primary-600: 180 83 9;
+    --primary-700: 146 64 14;
+    --primary-800: 120 53 15;
+    --primary-900: 96 42 12;
+    --primary-950: 54 21 4;
+
+    --hero-end: 154 52 18;
+    --hero-end-dark: 41 18 7;
+
+    --theme-canvas: 250 247 242;
+    --theme-canvas-dark: 18 13 8;
+    --theme-surface-dark: 29 21 13;
+    --theme-surface-modal: 25 18 11;
+  }
+
+  /* Theme 5: Merah Delima (Ruby Rose) */
+  [data-color-theme='rose'] {
+    --primary-50: 255 241 242;
+    --primary-100: 255 228 230;
+    --primary-200: 254 205 211;
+    --primary-300: 253 164 175;
+    --primary-400: 251 113 133;
+    --primary-500: 251 113 133;
+    --primary-600: 190 18 60;
+    --primary-700: 159 18 57;
+    --primary-800: 136 19 55;
+    --primary-900: 112 16 46;
+    --primary-950: 66 5 22;
+
+    --hero-end: 136 19 55;
+    --hero-end-dark: 48 6 20;
+
+    --theme-canvas: 253 246 248;
+    --theme-canvas-dark: 22 9 14;
+    --theme-surface-dark: 34 15 23;
+    --theme-surface-modal: 29 13 20;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  body {
+    background-color: rgb(var(--theme-canvas));
+    color: #0F172A;
+    overflow-x: hidden;
+  }
+
+  .dark {
+    --yellow: #FBBF24;
+  }
+
+  .dark body {
+    background-color: rgb(var(--theme-canvas-dark));
+    color: #F1F5F9;
+  }
+}
+
+/* Mesin Tipografi Arab HD */
+.arabic-text {
+  font-family: 'Amiri Quran', 'Scheherazade New', 'Noto Naskh Arabic', 'Amiri', 'Traditional Arabic', serif;
+  direction: rtl;
+  unicode-bidi: isolate;
+  line-height: 2.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
+  word-spacing: 0.08em;
+}
+
+.arabic-heading {
+  font-family: 'Amiri Quran', 'Scheherazade New', 'Noto Naskh Arabic', 'Amiri', 'Traditional Arabic', serif;
+  direction: rtl;
+  unicode-bidi: isolate;
+  line-height: 1.85;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Subtle Islamic geometric pattern overlay */
+.islamic-pattern {
+  background-image: radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.14) 1px, transparent 0);
+  background-size: 20px 20px;
+}
+
+/* Custom thin scrollbar */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Safe area padding for mobile fixed bars */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Audio equalizer bars animation */
+@keyframes eqPulse {
+
+  0%,
+  100% {
+    transform: scaleY(0.35);
+  }
+
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+.eq-bar {
+  transform-origin: bottom;
+  animation: eqPulse 0.85s ease-in-out infinite;
+}
+
+.eq-bar-2 {
+  animation-delay: 0.2s;
+}
+
+.eq-bar-3 {
+  animation-delay: 0.4s;
+}
+
+/* Custom range slider synced with active color theme */
+input[type='range'].quran-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 9999px;
+  outline: none;
+}
+
+input[type='range'].quran-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 9999px;
+  background: rgb(var(--primary-600));
+  border: 3px solid #ffffff;
+  box-shadow: 0 2px 6px rgb(var(--primary-600) / 0.35);
+  cursor: pointer;
+}
+
+.dark input[type='range'].quran-slider::-webkit-slider-thumb {
+  background: rgb(var(--primary-400));
+  border-color: rgb(var(--theme-surface-dark));
+}
+
+input[type='range'].quran-slider::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 9999px;
+  background: rgb(var(--primary-600));
+  border: 3px solid #ffffff;
+  box-shadow: 0 2px 6px rgb(var(--primary-600) / 0.35);
+  cursor: pointer;
+}
+
+.dark input[type='range'].quran-slider::-moz-range-thumb {
+  background: rgb(var(--primary-400));
+  border-color: rgb(var(--theme-surface-dark));
+}
+
+/* Warna Tajwid Digital — hanya mengubah warna agar ligatur/sambungan huruf Arab tetap utuh */
+.tajwid-ghunnah { color: #EA580C; }
+.dark .tajwid-ghunnah { color: #FB923C; }
+
+.tajwid-qalqalah { color: #0284C7; }
+.dark .tajwid-qalqalah { color: #38BDF8; }
+
+.tajwid-ikhfa { color: #DC2626; }
+.dark .tajwid-ikhfa { color: #F87171; }
+
+.tajwid-idgham-bighunnah { color: #9333EA; }
+.dark .tajwid-idgham-bighunnah { color: #C084FC; }
+
+.tajwid-idgham-bilaghunnah { color: #64748B; }
+.dark .tajwid-idgham-bilaghunnah { color: #94A3B8; }
+
+.tajwid-iqlab { color: #0D9488; }
+.dark .tajwid-iqlab { color: #2DD4BF; }
+
+.tajwid-mad { color: #4F46E5; }
+.dark .tajwid-mad { color: #818CF8; }
+
+/* Splash Screen gentle animations */
+@keyframes splashSpinSlow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes splashFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.splash-spin-slow {
+  animation: splashSpinSlow 24s linear infinite;
+}
+
+.splash-fade-up {
+  animation: splashFadeUp 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}

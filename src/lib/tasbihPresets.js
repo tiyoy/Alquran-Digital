@@ -1,0 +1,88 @@
+export const TASBIH_PRESETS = [
+  {
+    id: 'subhanallah',
+    name: 'Subhanallah',
+    arabic: 'سُبْحَانَ اللّٰهِ',
+    latin: 'Subḥānallāh',
+    meaning: 'Maha Suci Allah',
+    defaultTarget: 33,
+    afterPrayerOrder: 1,
+  },
+  {
+    id: 'alhamdulillah',
+    name: 'Alhamdulillah',
+    arabic: 'اَلْحَمْدُ لِلّٰهِ',
+    latin: 'Al-ḥamdu lillāh',
+    meaning: 'Segala puji bagi Allah',
+    defaultTarget: 33,
+    afterPrayerOrder: 2,
+  },
+  {
+    id: 'allahuakbar',
+    name: 'Allahu Akbar',
+    arabic: 'اَللّٰهُ أَكْبَرُ',
+    latin: 'Allāhu akbar',
+    meaning: 'Allah Maha Besar',
+    defaultTarget: 33,
+    afterPrayerOrder: 3,
+  },
+  {
+    id: 'istighfar',
+    name: 'Istighfar',
+    arabic: 'أَسْتَغْفِرُ اللّٰهَ الْعَظِيْمَ',
+    latin: 'Astaghfirullāhal-‘aẓīm',
+    meaning: 'Aku memohon ampun kepada Allah Yang Maha Agung',
+    defaultTarget: 100,
+    afterPrayerOrder: null,
+  },
+  {
+    id: 'tahlil',
+    name: 'Tahlil',
+    arabic: 'لَا إِلٰهَ إِلَّا اللّٰهُ',
+    latin: 'Lā ilāha illallāh',
+    meaning: 'Tiada tuhan yang berhak disembah selain Allah',
+    defaultTarget: 100,
+    afterPrayerOrder: null,
+  },
+  {
+    id: 'shalawat',
+    name: 'Shalawat Nabi',
+    arabic: 'اَللّٰهُمَّ صَلِّ عَلَى مُحَمَّدٍ وَعَلَى آلِ مُحَمَّدٍ',
+    latin: 'Allāhumma ṣalli ‘alā Muḥammadin wa ‘alā āli Muḥammad',
+    meaning: 'Ya Allah, limpahkanlah rahmat kepada Nabi Muhammad dan keluarga beliau',
+    defaultTarget: 100,
+    afterPrayerOrder: null,
+  },
+  {
+    id: 'baqiyatush',
+    name: 'Tasbih Lengkap',
+    arabic: 'سُبْحَانَ اللّٰهِ وَالْحَمْدُ لِلّٰهِ وَلَا إِلٰهَ إِلَّا اللّٰهُ وَاللّٰهُ أَكْبَرُ',
+    latin: 'Subḥānallāhi wal-ḥamdu lillāhi wa lā ilāha illallāhu wallāhu akbar',
+    meaning: 'Maha Suci Allah, segala puji bagi Allah, tiada tuhan selain Allah, dan Allah Maha Besar',
+    defaultTarget: 33,
+    afterPrayerOrder: null,
+  },
+  {
+    id: 'hauqalah',
+    name: 'Hauqalah',
+    arabic: 'لَا حَوْلَ وَلَا قُوَّةَ إِلَّا بِاللّٰهِ',
+    latin: 'Lā ḥaula wa lā quwwata illā billāh',
+    meaning: 'Tiada daya dan kekuatan melainkan dengan pertolongan Allah',
+    defaultTarget: 33,
+    afterPrayerOrder: null,
+  },
+];
+
+export const TASBIH_TARGETS = [
+  { value: 33, label: '33×' },
+  { value: 99, label: '99×' },
+  { value: 100, label: '100×' },
+  { value: 1000, label: '1000×' },
+  { value: 0, label: 'Bebas (∞)' },
+];
+
+export const KNOCK_SOUNDS = [
+  { id: 'wood', label: 'Kayu Tasbih', desc: 'Ketukan biji kayu hangat' },
+  { id: 'soft', label: 'Lembut', desc: 'Nada tetes kristal halus' },
+  { id: 'click', label: 'Klasik', desc: 'Klik tasbih digital' },
+];
