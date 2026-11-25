@@ -13,7 +13,8 @@ import {
   HardDrive,
 } from 'lucide-react';
 import { QARIS } from '@/lib/constants';
-import { getCachedAudioObjectUrl } from '@/lib/offlineAudio';
+import { getCachedAudioObjectUrl, hasCachedAudioUrl } from '@/lib/offlineAudio';
+import { shouldSyncPlaybackEffect } from '@/lib/audioPlayback';
 
 const PLAYBACK_RATES = [0.75, 1, 1.25, 1.5];
 // Repeat modes for Hifz (per-verse mode): 1 = auto-next normal, 3 = repeat 3x, 5 = repeat 5x, 0 = infinite loop
@@ -42,6 +43,10 @@ export default function AudioPlayerBar({
   const audioRef = useRef(null);
   const objectUrlRef = useRef(null);
   const repeatCounterRef = useRef(0);
+  const sourceReadyRef = useRef(false);
+  const switchingSourceRef = useRef(false);
+  const wantPlayRef = useRef(audioState.isPlaying);
+  const playbackRateRef = useRef(1);
 
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -50,12 +55,15 @@ export default function AudioPlayerBar({
   const [playbackRate, setPlaybackRate] = useState(1);
   const [repeatTarget, setRepeatTarget] = useState(1); // 1, 3, 5, or 0 (infinite)
 
+  wantPlayRef.current = audioState.isPlaying;
+  playbackRateRef.current = playbackRate;
+
   // Reset repeat count whenever verse/track changes
   useEffect(() => {
     repeatCounterRef.current = 0;
   }, [audioState.url, audioState.playNonce]);
 
-  // Sync audio source (preferring local offline Cache Storage first!) & playback
+  // Sync audio source (fast synchronous path for online audio, Cache Storage for offline downloads)
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || !audioState.active || !audioState.url) return;
@@ -66,12 +74,60 @@ export default function AudioPlayerBar({
     setIsBuffering(true);
     setIsOfflineSource(false);
 
-    (async () => {
-      if (objectUrlRef.current) {
-        URL.revokeObjectURL(objectUrlRef.current);
-        objectUrlRef.current = null;
-      }
+    const startPlayback = (srcUrl, offlineFlag) => {
+      if (cancelled) return;
+      switchingSourceRef.current = true;
+      setIsOfflineSource(offlineFlag);
+      audio.src = srcUrl;
+      audio.playbackRate = playbackRateRef.current;
+      sourceReadyRef.current = true;
+      audio.load();
 
+      if (wantPlayRef.current) {
+        const playPromise = audio.play();
+        if (playPromise && typeof playPromise.then === 'function') {
+          playPromise
+            .then(() => {
+              if (!cancelled) {
+                switchingSourceRef.current = false;
+              }
+            })
+            .catch((err) => {
+              if (!cancelled) {
+                switchingSourceRef.current = false;
+                if (err.name !== 'AbortError') {
+                  setIsBuffering(false);
+                  onSyncPlayState(false);
+                }
+              }
+            });
+        } else {
+          switchingSourceRef.current = false;
+        }
+      } else {
+        switchingSourceRef.current = false;
+        setIsBuffering(false);
+      }
+    };
+
+    if (objectUrlRef.current) {
+      URL.revokeObjectURL(objectUrlRef.current);
+      objectUrlRef.current = null;
+    }
+
+    // Fast path: jika URL tidak tercatat di cache offline, pasang src & play SECARA SINKRON
+    if (!hasCachedAudioUrl(audioState.url)) {
+      startPlayback(audioState.url, false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    // Offline cache path: tandai source belum siap selama lookup async agar efek play/pause tidak mendahului
+    sourceReadyRef.current = false;
+    switchingSourceRef.current = true;
+
+    (async () => {
       const cachedObjUrl = await getCachedAudioObjectUrl(audioState.url);
       if (cancelled) {
         if (cachedObjUrl) URL.revokeObjectURL(cachedObjUrl);
@@ -80,34 +136,16 @@ export default function AudioPlayerBar({
 
       if (cachedObjUrl) {
         objectUrlRef.current = cachedObjUrl;
-        setIsOfflineSource(true);
-        audio.src = cachedObjUrl;
+        startPlayback(cachedObjUrl, true);
       } else {
-        audio.src = audioState.url;
-      }
-
-      audio.playbackRate = playbackRate;
-      audio.load();
-
-      if (audioState.isPlaying) {
-        const playPromise = audio.play();
-        if (playPromise && typeof playPromise.catch === 'function') {
-          playPromise.catch((err) => {
-            if (!cancelled && err.name !== 'AbortError') {
-              setIsBuffering(false);
-              onSyncPlayState(false);
-            }
-          });
-        }
-      } else {
-        setIsBuffering(false);
+        startPlayback(audioState.url, false);
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [audioState.active, audioState.url, audioState.playNonce]);
+  }, [audioState.active, audioState.url, audioState.playNonce, onSyncPlayState]);
 
   // Sync playback speed live
   useEffect(() => {
@@ -116,18 +154,30 @@ export default function AudioPlayerBar({
     }
   }, [playbackRate]);
 
-  // Sync play/pause toggle without reloading source
+  // Sync play/pause toggle without reloading source (only after source is ready)
   useEffect(() => {
     const audio = audioRef.current;
-    if (!audio || !audioState.active || !audioState.url) return;
+    if (!audio) return;
 
-    if (audioState.isPlaying && audio.paused) {
+    const action = shouldSyncPlaybackEffect({
+      isActive: audioState.active,
+      hasUrl: Boolean(audioState.url),
+      isSourceReady: sourceReadyRef.current,
+      isPlaying: audioState.isPlaying,
+      audioPaused: audio.paused,
+    });
+
+    if (action === 'play') {
       audio.playbackRate = playbackRate;
       const p = audio.play();
       if (p && typeof p.catch === 'function') {
-        p.catch(() => onSyncPlayState(false));
+        p.catch((err) => {
+          if (err?.name !== 'AbortError') {
+            onSyncPlayState(false);
+          }
+        });
       }
-    } else if (!audioState.isPlaying && !audio.paused) {
+    } else if (action === 'pause') {
       audio.pause();
     }
   }, [audioState.isPlaying, audioState.active, audioState.url, playbackRate, onSyncPlayState]);
@@ -135,6 +185,8 @@ export default function AudioPlayerBar({
   // Cleanup on close/unmount
   useEffect(() => {
     if (!audioState.active && audioRef.current) {
+      sourceReadyRef.current = false;
+      switchingSourceRef.current = false;
       audioRef.current.pause();
       audioRef.current.removeAttribute('src');
       audioRef.current.load();
@@ -154,7 +206,80 @@ export default function AudioPlayerBar({
     };
   }, []);
 
-  if (!audioState.active) return null;
+  const handleInternalEnded = () => {
+    if (!audioState.active) return;
+    const audio = audioRef.current;
+    // Support repeat loop for Hifz (both verse & full surah)
+    if (repeatTarget === 0 && audio) {
+      audio.currentTime = 0;
+      audio.play().catch(() => {});
+      return;
+    }
+    if (repeatTarget > 1 && audio) {
+      repeatCounterRef.current += 1;
+      if (repeatCounterRef.current < repeatTarget) {
+        audio.currentTime = 0;
+        audio.play().catch(() => {});
+        return;
+      }
+      repeatCounterRef.current = 0;
+    }
+    onAudioEnded?.();
+  };
+
+  const audioElement = (
+    <audio
+      ref={audioRef}
+      preload="auto"
+      className="hidden"
+      onTimeUpdate={(e) => {
+        if (!audioState.active) return;
+        setCurrentTime(e.currentTarget.currentTime);
+      }}
+      onLoadedMetadata={(e) => {
+        if (!audioState.active) return;
+        setDuration(e.currentTarget.duration || 0);
+        setIsBuffering(false);
+      }}
+      onCanPlay={() => {
+        if (!audioState.active) return;
+        setIsBuffering(false);
+      }}
+      onWaiting={() => {
+        if (!audioState.active) return;
+        setIsBuffering(true);
+      }}
+      onPlaying={() => {
+        if (!audioState.active) return;
+        switchingSourceRef.current = false;
+        setIsBuffering(false);
+        onSyncPlayState(true);
+      }}
+      onPause={(e) => {
+        if (
+          !audioState.active ||
+          !sourceReadyRef.current ||
+          switchingSourceRef.current ||
+          e.currentTarget.ended
+        ) {
+          return;
+        }
+        onSyncPlayState(false);
+      }}
+      onEnded={handleInternalEnded}
+      onError={() => {
+        if (!audioState.active) return;
+        switchingSourceRef.current = false;
+        setIsBuffering(false);
+        onSyncPlayState(false);
+        onNotify?.('Audio murottal gagal dimuat. Pastikan koneksi aktif atau unduh audio untuk mode offline.');
+      }}
+    />
+  );
+
+  if (!audioState.active) {
+    return <>{audioElement}</>;
+  }
 
   const activeQari = QARIS.find((q) => q.id === qariId) || QARIS[0];
   const progressPercent = duration > 0 ? Math.min((currentTime / duration) * 100, 100) : 0;
@@ -183,55 +308,15 @@ export default function AudioPlayerBar({
     onNotify?.(`Mode pengulangan: ${label}`);
   };
 
-  const handleInternalEnded = () => {
-    const audio = audioRef.current;
-    // Support repeat loop for Hifz (both verse & full surah)
-    if (repeatTarget === 0 && audio) {
-      audio.currentTime = 0;
-      audio.play().catch(() => {});
-      return;
-    }
-    if (repeatTarget > 1 && audio) {
-      repeatCounterRef.current += 1;
-      if (repeatCounterRef.current < repeatTarget) {
-        audio.currentTime = 0;
-        audio.play().catch(() => {});
-        return;
-      }
-      repeatCounterRef.current = 0;
-    }
-    onAudioEnded?.();
-  };
-
   const repeatLabel = repeatTarget === 0 ? '∞' : `${repeatTarget}×`;
 
   return (
-    <aside
-      aria-label="Pemutar Audio Murottal"
-      className="fixed inset-x-0 bottom-[calc(68px+env(safe-area-inset-bottom,0px))] z-40 mx-auto max-w-4xl px-3 md:bottom-4 md:px-4"
-    >
-      <audio
-        ref={audioRef}
-        preload="auto"
-        onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
-        onLoadedMetadata={(e) => {
-          setDuration(e.currentTarget.duration || 0);
-          setIsBuffering(false);
-        }}
-        onCanPlay={() => setIsBuffering(false)}
-        onWaiting={() => setIsBuffering(true)}
-        onPlaying={() => {
-          setIsBuffering(false);
-          onSyncPlayState(true);
-        }}
-        onPause={() => onSyncPlayState(false)}
-        onEnded={handleInternalEnded}
-        onError={() => {
-          setIsBuffering(false);
-          onSyncPlayState(false);
-          onNotify?.('Audio murottal gagal dimuat. Pastikan koneksi aktif atau unduh audio untuk mode offline.');
-        }}
-      />
+    <>
+      {audioElement}
+      <aside
+        aria-label="Pemutar Audio Murottal"
+        className="fixed inset-x-0 bottom-[calc(68px+env(safe-area-inset-bottom,0px))] z-40 mx-auto max-w-4xl px-3 md:bottom-4 md:px-4"
+      >
 
       <div className="overflow-hidden rounded-2xl border border-emerald-200/90 bg-white/95 shadow-xl backdrop-blur-lg dark:border-emerald-800/80 dark:bg-surface-modal/95">
         {/* Top thin seek bar */}
@@ -397,5 +482,6 @@ export default function AudioPlayerBar({
         </div>
       </div>
     </aside>
+    </>
   );
 }

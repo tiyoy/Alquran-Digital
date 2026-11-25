@@ -28,29 +28,12 @@ import {
   playTasbihKnock,
   triggerTasbihHaptic,
 } from '@/lib/tasbihAudio';
-
-function getTodayDateKey() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
-    d.getDate()
-  ).padStart(2, '0')}`;
-}
-
-const DEFAULT_TASBIH_STATE = {
-  activePresetId: 'subhanallah',
-  count: 0,
-  cycles: 0,
-  target: 33,
-  soundEnabled: true,
-  soundType: 'wood',
-  hapticEnabled: true,
-  autoChainAfterPrayer: false,
-  todayDateKey: '',
-  todayTotal: 0,
-  allTimeTotal: 0,
-  perPresetCounts: {},
-  customPresets: [],
-};
+import {
+  DEFAULT_TASBIH_STATE,
+  getTodayDateKey,
+  hasTasbihTotalsOrHistory,
+  resetTasbihTotalsAndHistory,
+} from '@/lib/tasbihState';
 
 const BEAD_RING_COUNT = 33;
 
@@ -66,6 +49,7 @@ export default function TasbihView({ onNotify }) {
   const [isPressed, setIsPressed] = useState(false);
   const [justCompletedTarget, setJustCompletedTarget] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [confirmResetTotal, setConfirmResetTotal] = useState(false);
 
   // Custom target & custom dzikir form states
   const [customTargetInput, setCustomTargetInput] = useState('');
@@ -77,6 +61,7 @@ export default function TasbihView({ onNotify }) {
 
   const completeTimerRef = useRef(null);
   const confirmResetTimerRef = useRef(null);
+  const confirmResetTotalTimerRef = useRef(null);
   const stateRef = useRef(state);
 
   useEffect(() => {
@@ -117,6 +102,9 @@ export default function TasbihView({ onNotify }) {
     return () => {
       if (completeTimerRef.current) clearTimeout(completeTimerRef.current);
       if (confirmResetTimerRef.current) clearTimeout(confirmResetTimerRef.current);
+      if (confirmResetTotalTimerRef.current) {
+        clearTimeout(confirmResetTotalTimerRef.current);
+      }
     };
   }, []);
 
@@ -153,6 +141,7 @@ export default function TasbihView({ onNotify }) {
 
     setPulseKey((k) => k + 1);
     setConfirmReset(false);
+    setConfirmResetTotal(false);
 
     if (reachedTarget) {
       setJustCompletedTarget(true);
@@ -253,6 +242,31 @@ export default function TasbihView({ onNotify }) {
       ...prev,
       count: Math.max(0, prev.count - 1),
     }));
+  };
+
+  const canResetTotal = useMemo(() => hasTasbihTotalsOrHistory(state), [state]);
+
+  const handleResetTotal = () => {
+    if (!canResetTotal) return;
+    if (!confirmResetTotal) {
+      setConfirmResetTotal(true);
+      if (confirmResetTotalTimerRef.current) {
+        clearTimeout(confirmResetTotalTimerRef.current);
+      }
+      confirmResetTotalTimerRef.current = setTimeout(
+        () => setConfirmResetTotal(false),
+        3000
+      );
+      return;
+    }
+    setConfirmResetTotal(false);
+    if (confirmResetTotalTimerRef.current) {
+      clearTimeout(confirmResetTotalTimerRef.current);
+    }
+    setConfirmReset(false);
+    setJustCompletedTarget(false);
+    setState((prev) => resetTasbihTotalsAndHistory(prev, getTodayDateKey()));
+    onNotify?.('Total tasbih dan riwayat bacaan berhasil direset');
   };
 
   const handleReset = () => {
@@ -378,24 +392,46 @@ export default function TasbihView({ onNotify }) {
             </p>
           </div>
 
-          {/* Daily & Total Stats Pill */}
-          <div className="flex items-center gap-3 self-start sm:self-center">
-            <div className="rounded-xl border border-white/20 bg-white/15 px-4 py-2.5 backdrop-blur-sm text-center min-w-[100px]">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-gold-200">
-                Hari Ini
-              </p>
-              <p className="text-xl font-extrabold tabular-nums text-white">
-                {state.todayTotal.toLocaleString('id-ID')}
-              </p>
+          {/* Daily & Total Stats Pill + Reset Total Button */}
+          <div className="flex flex-col gap-2.5 self-start sm:self-center sm:items-end">
+            <div className="flex items-center gap-3">
+              <div className="rounded-xl border border-white/20 bg-white/15 px-4 py-2.5 backdrop-blur-sm text-center min-w-[100px]">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-gold-200">
+                  Hari Ini
+                </p>
+                <p className="text-xl font-extrabold tabular-nums text-white">
+                  {state.todayTotal.toLocaleString('id-ID')}
+                </p>
+              </div>
+              <div className="rounded-xl border border-white/20 bg-white/15 px-4 py-2.5 backdrop-blur-sm text-center min-w-[100px]">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-emerald-100">
+                  Total Dzikir
+                </p>
+                <p className="text-xl font-extrabold tabular-nums text-white">
+                  {state.allTimeTotal.toLocaleString('id-ID')}
+                </p>
+              </div>
             </div>
-            <div className="rounded-xl border border-white/20 bg-white/15 px-4 py-2.5 backdrop-blur-sm text-center min-w-[100px]">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-emerald-100">
-                Total Dzikir
-              </p>
-              <p className="text-xl font-extrabold tabular-nums text-white">
-                {state.allTimeTotal.toLocaleString('id-ID')}
-              </p>
-            </div>
+
+            <button
+              type="button"
+              onClick={handleResetTotal}
+              disabled={!canResetTotal}
+              aria-label="Reset total tasbih dan hapus riwayat bacaan tasbih"
+              title="Reset total tasbih dan otomatis menghapus riwayat bacaan"
+              className={`inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-xl border px-3.5 text-xs font-bold transition-colors disabled:opacity-45 disabled:cursor-not-allowed cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 ${
+                confirmResetTotal
+                  ? 'border-red-300 bg-red-600 text-white shadow-sm hover:bg-red-700'
+                  : 'border-white/25 bg-white/15 text-white backdrop-blur-sm hover:border-red-300/70 hover:bg-red-500/85'
+              }`}
+            >
+              <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>
+                {confirmResetTotal
+                  ? 'Yakin Reset Total & Riwayat?'
+                  : 'Reset Total & Riwayat'}
+              </span>
+            </button>
           </div>
         </div>
       </section>
@@ -928,7 +964,7 @@ export default function TasbihView({ onNotify }) {
           </div>
 
           {/* Catatan Pencapaian per Dzikir */}
-          {Object.keys(state.perPresetCounts || {}).length > 0 && (
+          {Object.values(state.perPresetCounts || {}).some((total) => total > 0) && (
             <div className="rounded-2xl border border-emerald-100 bg-white p-4 sm:p-5 shadow-sm dark:border-emerald-900/60 dark:bg-surface-dark space-y-2.5">
               <h2 className="flex items-center gap-2 text-sm font-extrabold text-slate-900 dark:text-slate-100">
                 <Sparkles className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />

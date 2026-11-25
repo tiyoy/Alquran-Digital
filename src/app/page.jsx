@@ -29,7 +29,8 @@ import SplashScreen from '@/components/SplashScreen';
 import { fetchSurahDetail, fetchSurahList } from '@/lib/api';
 import { COLOR_THEMES, DEFAULT_SETTINGS, STORAGE_KEYS } from '@/lib/constants';
 import { DEFAULT_PRAYER_CITY } from '@/lib/regions';
-import { getDownloadedAudioIndex } from '@/lib/offlineAudio';
+import { getDownloadedAudioIndex, makeAudioKey } from '@/lib/offlineAudio';
+import { resolveSurahPlaybackTarget } from '@/lib/audioPlayback';
 
 function getTodayKey() {
   const d = new Date();
@@ -151,6 +152,8 @@ export default function HomePage() {
   const settingsRef = useRef(DEFAULT_SETTINGS);
   const surahBookmarksRef = useRef([]);
   const verseBookmarksRef = useRef([]);
+  const offlineAudioIndexRef = useRef({});
+  const surahRequestSeqRef = useRef(0);
 
   useEffect(() => {
     audioStateRef.current = audioState;
@@ -167,6 +170,10 @@ export default function HomePage() {
   useEffect(() => {
     verseBookmarksRef.current = verseBookmarks;
   }, [verseBookmarks]);
+
+  useEffect(() => {
+    offlineAudioIndexRef.current = offlineAudioIndex;
+  }, [offlineAudioIndex]);
 
   const notify = useCallback((message) => {
     setToast(message);
@@ -355,8 +362,55 @@ export default function HomePage() {
     loadSurahList();
   }, [loadSurahList]);
 
-  // Load selected Surah detail
+  const startSurahPlayback = useCallback(
+    (surahData, startVerse = 1) => {
+      const qariId = settingsRef.current.qariId;
+      const hasOfflineFullAudio = Boolean(
+        offlineAudioIndexRef.current?.[makeAudioKey(surahData.nomor, qariId)]
+      );
+      const isOffline =
+        typeof navigator !== 'undefined' && navigator.onLine === false;
+
+      const target = resolveSurahPlaybackTarget(surahData, qariId, {
+        startVerse,
+        isOffline,
+        hasOfflineFullAudio,
+      });
+
+      if (!target) {
+        notify('Audio surah ini belum tersedia untuk Qari terpilih');
+        return;
+      }
+
+      if (target.mode === 'verse' && target.verseNumber) {
+        setLastRead({
+          surahNumber: surahData.nomor,
+          surahName: surahData.namaLatin,
+          verseNumber: target.verseNumber,
+          timestamp: Date.now(),
+        });
+      }
+
+      setAudioState((prev) => ({
+        active: true,
+        isPlaying: true,
+        mode: target.mode,
+        surahNumber: surahData.nomor,
+        surahName: surahData.namaLatin,
+        verseNumber: target.verseNumber,
+        totalVerses: surahData.jumlahAyat,
+        url: target.url,
+        surahData,
+        playNonce: prev.playNonce + 1,
+      }));
+    },
+    [notify]
+  );
+
+  // Load selected Surah detail (audio baru berjalan ketika user menekan tombol Putar Surah / Ayat)
   const loadSurahDetail = useCallback(async (nomor, targetVerse = null) => {
+    const reqId = ++surahRequestSeqRef.current;
+
     setSelectedSurahNumber(nomor);
     setActiveTab('quran');
     setReaderLoading(true);
@@ -369,6 +423,7 @@ export default function HomePage() {
 
     try {
       const data = await fetchSurahDetail(nomor);
+      if (reqId !== surahRequestSeqRef.current) return;
       setCurrentSurah(data);
       setLastRead({
         surahNumber: data.nomor,
@@ -377,9 +432,12 @@ export default function HomePage() {
         timestamp: Date.now(),
       });
     } catch (err) {
+      if (reqId !== surahRequestSeqRef.current) return;
       setReaderError(err.message || 'Gagal memuat isi surah');
     } finally {
-      setReaderLoading(false);
+      if (reqId === surahRequestSeqRef.current) {
+        setReaderLoading(false);
+      }
     }
   }, []);
 
@@ -551,25 +609,9 @@ export default function HomePage() {
   // Audio playback handlers
   const handlePlayFullSurah = useCallback(
     (surahData) => {
-      const url = surahData.audioFull?.[settings.qariId];
-      if (!url) {
-        notify('Audio surah ini belum tersedia untuk Qari terpilih');
-        return;
-      }
-      setAudioState((prev) => ({
-        active: true,
-        isPlaying: true,
-        mode: 'full',
-        surahNumber: surahData.nomor,
-        surahName: surahData.namaLatin,
-        verseNumber: null,
-        totalVerses: surahData.jumlahAyat,
-        url,
-        surahData,
-        playNonce: prev.playNonce + 1,
-      }));
+      startSurahPlayback(surahData, 1);
     },
-    [settings.qariId, notify]
+    [startSurahPlayback]
   );
 
   const handlePlayVerse = useCallback(

@@ -37,6 +37,16 @@ export function isSurahAudioDownloaded(surahNumber, qariId) {
 }
 
 /**
+ * Cek sinkron apakah sebuah URL audio tercatat di indeks cache offline
+ * sehingga pemutaran online tidak perlu menunggu async Cache Storage lookup.
+ */
+export function hasCachedAudioUrl(url) {
+  if (!url) return false;
+  const idx = getDownloadedAudioIndex();
+  return Object.values(idx).some((entry) => entry?.url === url);
+}
+
+/**
  * Mengunduh MP3 surah ke browser Cache Storage untuk pemutaran offline
  * dengan pelaporan progres persentase (0–100).
  */

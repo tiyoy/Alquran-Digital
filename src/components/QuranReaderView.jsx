@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
   Play,
@@ -37,8 +37,17 @@ import {
   removeDownloadedSurahAudio,
   triggerMp3DeviceDownload,
 } from '@/lib/offlineAudio';
+import TajwidTooltipCard from '@/components/TajwidTooltipCard';
 
-function ArabicVerseText({ text, showTajwid }) {
+function ArabicVerseText({
+  text,
+  showTajwid,
+  verseNumber,
+  activeTajwidKey,
+  onHoverTajwid,
+  onLeaveTajwid,
+  onSelectTajwid,
+}) {
   const cleaned = cleanArabicText(text);
   const segments = useMemo(
     () => (showTajwid ? parseTajwidSegments(cleaned) : null),
@@ -47,15 +56,42 @@ function ArabicVerseText({ text, showTajwid }) {
 
   if (!showTajwid || !segments) return cleaned;
 
-  return segments.map((seg, idx) =>
-    seg.rule ? (
-      <span key={idx} className={`tajwid-${seg.rule}`}>
+  return segments.map((seg, idx) => {
+    if (!seg.rule || !seg.detail) {
+      return <span key={idx}>{seg.text}</span>;
+    }
+    const segKey = `${verseNumber}-${idx}`;
+    const isActive = activeTajwidKey === segKey;
+    return (
+      <span
+        key={idx}
+        role="button"
+        tabIndex={0}
+        data-tajwid-interactive="true"
+        aria-label={`${seg.detail.hukum}, ${seg.detail.jenis}. Ketuk untuk melihat cara baca`}
+        aria-expanded={isActive}
+        className={`tajwid-${seg.rule} tajwid-interactive${
+          isActive ? ' tajwid-interactive-active' : ''
+        }`}
+        onMouseEnter={(e) => onHoverTajwid?.(seg, e.currentTarget, segKey)}
+        onMouseLeave={() => onLeaveTajwid?.()}
+        onFocus={(e) => onHoverTajwid?.(seg, e.currentTarget, segKey)}
+        onBlur={() => onLeaveTajwid?.()}
+        onClick={(e) => {
+          e.stopPropagation();
+          onSelectTajwid?.(seg, e.currentTarget, segKey);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onSelectTajwid?.(seg, e.currentTarget, segKey);
+          }
+        }}
+      >
         {seg.text}
       </span>
-    ) : (
-      <span key={idx}>{seg.text}</span>
-    )
-  );
+    );
+  });
 }
 
 export default function QuranReaderView({
@@ -94,10 +130,148 @@ export default function QuranReaderView({
   const [copiedVerse, setCopiedVerse] = useState(null);
   const [showInfo, setShowInfo] = useState(false);
   const [showTajwidLegend, setShowTajwidLegend] = useState(false);
+  const [activeTajwid, setActiveTajwid] = useState(null);
   const [downloadProgress, setDownloadProgress] = useState(null);
   const [savingMp3, setSavingMp3] = useState(false);
 
   const verseRefs = useRef(new Map());
+  const tajwidAnchorRef = useRef(null);
+  const tajwidCloseTimerRef = useRef(null);
+
+  const clearTajwidCloseTimer = useCallback(() => {
+    if (tajwidCloseTimerRef.current) {
+      clearTimeout(tajwidCloseTimerRef.current);
+      tajwidCloseTimerRef.current = null;
+    }
+  }, []);
+
+  const readRectSnapshot = (el) => {
+    if (!el || typeof el.getBoundingClientRect !== 'function') return null;
+    const r = el.getBoundingClientRect();
+    return {
+      left: r.left,
+      right: r.right,
+      top: r.top,
+      bottom: r.bottom,
+      width: r.width,
+      height: r.height,
+    };
+  };
+
+  const handleHoverTajwid = useCallback(
+    (seg, el, segKey) => {
+      clearTajwidCloseTimer();
+      setActiveTajwid((prev) => {
+        if (prev?.pinned) return prev;
+        tajwidAnchorRef.current = el;
+        return {
+          key: segKey,
+          ruleId: seg.rule,
+          text: seg.text,
+          detail: seg.detail,
+          pinned: false,
+          rect: readRectSnapshot(el),
+        };
+      });
+    },
+    [clearTajwidCloseTimer]
+  );
+
+  const handleLeaveTajwid = useCallback(() => {
+    clearTajwidCloseTimer();
+    tajwidCloseTimerRef.current = setTimeout(() => {
+      setActiveTajwid((prev) => (prev && !prev.pinned ? null : prev));
+    }, 160);
+  }, [clearTajwidCloseTimer]);
+
+  const handleSelectTajwid = useCallback(
+    (seg, el, segKey) => {
+      clearTajwidCloseTimer();
+      setActiveTajwid((prev) => {
+        if (prev && prev.key === segKey && prev.pinned) {
+          tajwidAnchorRef.current = null;
+          return null;
+        }
+        tajwidAnchorRef.current = el;
+        return {
+          key: segKey,
+          ruleId: seg.rule,
+          text: seg.text,
+          detail: seg.detail,
+          pinned: true,
+          rect: readRectSnapshot(el),
+        };
+      });
+    },
+    [clearTajwidCloseTimer]
+  );
+
+  const handleCloseTajwid = useCallback(() => {
+    clearTajwidCloseTimer();
+    tajwidAnchorRef.current = null;
+    setActiveTajwid(null);
+  }, [clearTajwidCloseTimer]);
+
+  // Tutup keterangan tajwid saat tajwid dimatikan atau pindah surah
+  useEffect(() => {
+    handleCloseTajwid();
+  }, [settings.showTajwid, surah?.nomor, handleCloseTajwid]);
+
+  // Tutup saat klik luar / Esc, dan sinkronkan posisi saat scroll
+  useEffect(() => {
+    if (!activeTajwid) return;
+
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') handleCloseTajwid();
+    };
+
+    const onDocumentClick = (e) => {
+      if (
+        e.target?.closest?.('[data-tajwid-popover="true"]') ||
+        e.target?.closest?.('[data-tajwid-interactive="true"]')
+      ) {
+        return;
+      }
+      handleCloseTajwid();
+    };
+
+    const onScrollOrResize = () => {
+      if (!activeTajwid.pinned) {
+        handleCloseTajwid();
+        return;
+      }
+      const el = tajwidAnchorRef.current;
+      if (!el || !el.isConnected) {
+        handleCloseTajwid();
+        return;
+      }
+      const nextRect = readRectSnapshot(el);
+      if (
+        !nextRect ||
+        nextRect.bottom < 0 ||
+        nextRect.top > window.innerHeight
+      ) {
+        handleCloseTajwid();
+        return;
+      }
+      setActiveTajwid((prev) => (prev ? { ...prev, rect: nextRect } : null));
+    };
+
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('click', onDocumentClick);
+    window.addEventListener('scroll', onScrollOrResize, { passive: true });
+    window.addEventListener('resize', onScrollOrResize);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('click', onDocumentClick);
+      window.removeEventListener('scroll', onScrollOrResize);
+      window.removeEventListener('resize', onScrollOrResize);
+    };
+  }, [activeTajwid, handleCloseTajwid]);
+
+  useEffect(() => {
+    return () => clearTajwidCloseTimer();
+  }, [clearTajwidCloseTimer]);
 
   const verseBookmarkSet = useMemo(() => {
     const set = new Set();
@@ -154,20 +328,26 @@ export default function QuranReaderView({
 
   useEffect(() => {
     if (
+      !loading &&
       surah &&
       audioState.active &&
       audioState.mode === 'verse' &&
       audioState.surahNumber === surah.nomor &&
       audioState.verseNumber
     ) {
-      scrollToVerse(audioState.verseNumber, false);
+      const rafId = window.requestAnimationFrame(() => {
+        scrollToVerse(audioState.verseNumber, false);
+      });
+      return () => window.cancelAnimationFrame(rafId);
     }
   }, [
+    loading,
     surah,
     audioState.active,
     audioState.mode,
     audioState.surahNumber,
     audioState.verseNumber,
+    audioState.playNonce,
   ]);
 
   const handleJumpSubmit = (e) => {
@@ -261,7 +441,6 @@ export default function QuranReaderView({
 
   const isPlayingThisSurahFull =
     audioState.active &&
-    audioState.mode === 'full' &&
     surah &&
     audioState.surahNumber === surah.nomor;
 
@@ -611,10 +790,15 @@ export default function QuranReaderView({
         {/* Tajwid Legend Strip when Tajwid mode is ON */}
         {settings.showTajwid && (
           <div className="border-t border-emerald-100 pt-3 dark:border-emerald-900/50">
-            <div className="flex items-center justify-between gap-2 mb-2">
-              <p className="text-xs font-bold text-slate-700 dark:text-slate-200">
-                Panduan Warna Tajwid Digital
-              </p>
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+              <div>
+                <p className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                  Panduan Warna Tajwid Digital
+                </p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Sorot atau ketuk huruf berwarna pada ayat untuk melihat jenis, hukum, dan cara baca tajwidnya.
+                </p>
+              </div>
               <button
                 type="button"
                 onClick={() => setShowTajwidLegend((v) => !v)}
@@ -852,6 +1036,11 @@ export default function QuranReaderView({
                     <ArabicVerseText
                       text={ayat.teksArab}
                       showTajwid={Boolean(settings.showTajwid)}
+                      verseNumber={ayat.nomorAyat}
+                      activeTajwidKey={activeTajwid?.key || null}
+                      onHoverTajwid={handleHoverTajwid}
+                      onLeaveTajwid={handleLeaveTajwid}
+                      onSelectTajwid={handleSelectTajwid}
                     />{' '}
                     <span
                       className="inline-flex items-center justify-center px-1.5 text-[0.72em] text-gold-600 dark:text-gold-400 select-none"
@@ -978,6 +1167,14 @@ export default function QuranReaderView({
           <div />
         )}
       </nav>
+      {/* Interactive Tajwid Explanation Popover / Floating Card */}
+      <TajwidTooltipCard
+        activeTajwid={activeTajwid}
+        hasActiveAudio={Boolean(audioState.active)}
+        onClose={handleCloseTajwid}
+        onMouseEnter={clearTajwidCloseTimer}
+        onMouseLeave={handleLeaveTajwid}
+      />
     </div>
   );
 }
