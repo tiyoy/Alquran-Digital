@@ -40,8 +40,13 @@ export default function KhatamTrackerCard({
   const todayVerses = readingStats?.todayVerses || 0;
   const streak = readingStats?.streak || 0;
   const readSurahsCount = readingStats?.readSurahs?.length || 0;
+  const hasPartialSurahProgress = Object.keys(
+    readingStats?.readVersesBySurah || {}
+  ).length > 0;
   const progressPct = Math.min(100, Math.round((todayVerses / target) * 100));
-  const hasProgress = todayVerses > 0 || streak > 0 || readSurahsCount > 0;
+  const isTargetReached = todayVerses >= target;
+  const hasProgress =
+    todayVerses > 0 || streak > 0 || readSurahsCount > 0 || hasPartialSurahProgress;
 
   const handleResetClick = () => {
     if (!hasProgress) return;
@@ -130,17 +135,28 @@ export default function KhatamTrackerCard({
 
         {/* Progress Bar */}
         <div className="space-y-1.5">
-          <div className="flex items-baseline justify-between text-xs">
+          <div className="flex items-baseline justify-between gap-2 text-xs">
             <span className="font-bold text-slate-700 dark:text-slate-200 tabular-nums">
               {todayVerses} / {target} ayat hari ini
             </span>
-            <span className="font-extrabold text-emerald-700 dark:text-emerald-300 tabular-nums">
-              {progressPct}%
-            </span>
+            <div className="flex items-center gap-1.5">
+              {isTargetReached && (
+                <span className="rounded-full bg-gold-100 px-2 py-0.5 text-[10px] font-extrabold text-gold-800 dark:bg-gold-950/70 dark:text-gold-300">
+                  Target Tercapai
+                </span>
+              )}
+              <span className="font-extrabold text-emerald-700 dark:text-emerald-300 tabular-nums">
+                {progressPct}%
+              </span>
+            </div>
           </div>
           <div className="h-2.5 w-full overflow-hidden rounded-full bg-emerald-100 dark:bg-emerald-950">
             <div
-              className="h-full rounded-full bg-emerald-600 transition-all duration-300 dark:bg-emerald-400"
+              className={`h-full rounded-full transition-all duration-300 ${
+                isTargetReached
+                  ? 'bg-gold-500 dark:bg-gold-400'
+                  : 'bg-emerald-600 dark:bg-emerald-400'
+              }`}
               style={{ width: `${progressPct}%` }}
             />
           </div>

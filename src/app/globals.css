@@ -294,21 +294,17 @@ input[type='range'].quran-slider::-moz-range-thumb {
 .tajwid-mad { color: #4F46E5; }
 .dark .tajwid-mad { color: #818CF8; }
 
-/* Indikator interaktif tajwid — tetap inline murni tanpa padding/border agar sambungan huruf Arab utuh */
+/* Interaktif tajwid — tetap inline murni tanpa garis/titik bawah agar huruf Arab & harakat tetap bersih */
 .tajwid-interactive {
   cursor: pointer;
-  text-decoration-line: underline;
-  text-decoration-style: dotted;
-  text-decoration-thickness: 1.5px;
-  text-underline-offset: 0.24em;
-  text-decoration-skip-ink: none;
+  text-decoration: none;
+  transition: opacity 0.15s ease;
 }
 
 .tajwid-interactive:hover,
 .tajwid-interactive:focus-visible,
 .tajwid-interactive-active {
-  text-decoration-style: solid;
-  text-decoration-thickness: 2.5px;
+  opacity: 0.78;
   outline: none;
 }
 

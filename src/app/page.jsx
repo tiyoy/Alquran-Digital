@@ -31,30 +31,16 @@ import { COLOR_THEMES, DEFAULT_SETTINGS, STORAGE_KEYS } from '@/lib/constants';
 import { DEFAULT_PRAYER_CITY } from '@/lib/regions';
 import { getDownloadedAudioIndex, makeAudioKey } from '@/lib/offlineAudio';
 import { resolveSurahPlaybackTarget } from '@/lib/audioPlayback';
-
-function getTodayKey() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
-    d.getDate()
-  ).padStart(2, '0')}`;
-}
-
-function getYesterdayKey() {
-  const d = new Date();
-  d.setDate(d.getDate() - 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
-    d.getDate()
-  ).padStart(2, '0')}`;
-}
-
-const DEFAULT_READING_STATS = {
-  dailyTarget: 20,
-  todayKey: '',
-  todayVerses: 0,
-  lastReadDateKey: '',
-  streak: 0,
-  readSurahs: [],
-};
+import {
+  DEFAULT_READING_STATS,
+  getDateKey,
+  getYesterdayDateKey,
+  hydrateReadingStats,
+  markSurahFullyRead,
+  recordVerseRead,
+  resetAllReadingStats,
+  setManualLastReadVerse,
+} from '@/lib/readingProgress';
 
 const TAB_ITEMS = [
   { id: 'quran', label: "Al-Qur'an", mobileLabel: "Qur'an", icon: BookOpen },
@@ -106,7 +92,7 @@ export default function HomePage() {
   const [verseNotes, setVerseNotes] = useState({});
   const [readingStats, setReadingStats] = useState(() => ({
     ...DEFAULT_READING_STATS,
-    todayKey: getTodayKey(),
+    todayKey: getDateKey(),
   }));
   const [offlineAudioIndex, setOfflineAudioIndex] = useState({});
   const [lastRead, setLastRead] = useState(null);
@@ -153,6 +139,8 @@ export default function HomePage() {
   const surahBookmarksRef = useRef([]);
   const verseBookmarksRef = useRef([]);
   const offlineAudioIndexRef = useRef({});
+  const readingStatsRef = useRef(DEFAULT_READING_STATS);
+  const lastReadRef = useRef(null);
   const surahRequestSeqRef = useRef(0);
 
   useEffect(() => {
@@ -174,6 +162,14 @@ export default function HomePage() {
   useEffect(() => {
     offlineAudioIndexRef.current = offlineAudioIndex;
   }, [offlineAudioIndex]);
+
+  useEffect(() => {
+    readingStatsRef.current = readingStats;
+  }, [readingStats]);
+
+  useEffect(() => {
+    lastReadRef.current = lastRead;
+  }, [lastRead]);
 
   const notify = useCallback((message) => {
     setToast(message);
@@ -219,28 +215,21 @@ export default function HomePage() {
     if (savedNotes && typeof savedNotes === 'object') setVerseNotes(savedNotes);
 
     const savedStats = safeReadLocalStorage(STORAGE_KEYS.READING_STATS, null);
-    const today = getTodayKey();
-    const yesterday = getYesterdayKey();
-    if (savedStats && typeof savedStats === 'object') {
-      const sameDay = savedStats.todayKey === today;
-      const validStreak =
-        savedStats.lastReadDateKey === today || savedStats.lastReadDateKey === yesterday
-          ? Number(savedStats.streak) || 0
-          : 0;
-      setReadingStats({
-        ...DEFAULT_READING_STATS,
-        ...savedStats,
-        todayKey: today,
-        todayVerses: sameDay ? Number(savedStats.todayVerses) || 0 : 0,
-        streak: validStreak,
-        readSurahs: Array.isArray(savedStats.readSurahs) ? savedStats.readSurahs : [],
-      });
-    }
+    const hydratedStats = hydrateReadingStats(
+      savedStats,
+      getDateKey(),
+      getYesterdayDateKey()
+    );
+    readingStatsRef.current = hydratedStats;
+    setReadingStats(hydratedStats);
 
     setOfflineAudioIndex(getDownloadedAudioIndex());
 
     const savedLastRead = safeReadLocalStorage(STORAGE_KEYS.LAST_READ, null);
-    if (savedLastRead?.surahNumber) setLastRead(savedLastRead);
+    if (savedLastRead?.surahNumber) {
+      lastReadRef.current = savedLastRead;
+      setLastRead(savedLastRead);
+    }
 
     const savedCity = safeReadLocalStorage(STORAGE_KEYS.PRAYER_CITY, null);
     if (savedCity?.id) setSelectedCity(savedCity);
@@ -277,9 +266,13 @@ export default function HomePage() {
   }, [verseBookmarks, hydrated]);
 
   useEffect(() => {
-    if (!hydrated || !lastRead) return;
+    if (!hydrated) return;
     try {
-      window.localStorage.setItem(STORAGE_KEYS.LAST_READ, JSON.stringify(lastRead));
+      if (lastRead) {
+        window.localStorage.setItem(STORAGE_KEYS.LAST_READ, JSON.stringify(lastRead));
+      } else {
+        window.localStorage.removeItem(STORAGE_KEYS.LAST_READ);
+      }
     } catch {}
   }, [lastRead, hydrated]);
 
@@ -382,15 +375,6 @@ export default function HomePage() {
         return;
       }
 
-      if (target.mode === 'verse' && target.verseNumber) {
-        setLastRead({
-          surahNumber: surahData.nomor,
-          surahName: surahData.namaLatin,
-          verseNumber: target.verseNumber,
-          timestamp: Date.now(),
-        });
-      }
-
       setAudioState((prev) => ({
         active: true,
         isPlaying: true,
@@ -425,12 +409,6 @@ export default function HomePage() {
       const data = await fetchSurahDetail(nomor);
       if (reqId !== surahRequestSeqRef.current) return;
       setCurrentSurah(data);
-      setLastRead({
-        surahNumber: data.nomor,
-        surahName: data.namaLatin,
-        verseNumber: targetVerse || 1,
-        timestamp: Date.now(),
-      });
     } catch (err) {
       if (reqId !== surahRequestSeqRef.current) return;
       setReaderError(err.message || 'Gagal memuat isi surah');
@@ -501,12 +479,6 @@ export default function HomePage() {
         notify(`Bookmark ${entry.surahName}:${entry.verseNumber} dihapus`);
       } else {
         notify(`${entry.surahName}:${entry.verseNumber} disimpan ke Bookmark`);
-        setLastRead({
-          surahNumber: entry.surahNumber,
-          surahName: entry.surahName,
-          verseNumber: entry.verseNumber,
-          timestamp: Date.now(),
-        });
       }
     },
     [notify]
@@ -523,15 +495,6 @@ export default function HomePage() {
     },
     [notify]
   );
-
-  const handleMarkLastRead = useCallback((surahObj, verseNumber) => {
-    setLastRead({
-      surahNumber: surahObj.nomor,
-      surahName: surahObj.namaLatin,
-      verseNumber,
-      timestamp: Date.now(),
-    });
-  }, []);
 
   // Verse Notes handlers (PRD Roadmap 7.4)
   const handleSaveVerseNote = useCallback(
@@ -559,45 +522,133 @@ export default function HomePage() {
   // Khatam & Daily Reading Stats handlers
   const handleChangeDailyTarget = useCallback(
     (targetNum) => {
-      setReadingStats((prev) => ({ ...prev, dailyTarget: targetNum }));
+      const next = { ...readingStatsRef.current, dailyTarget: targetNum };
+      readingStatsRef.current = next;
+      setReadingStats(next);
       notify(`Target bacaan harian diubah ke ${targetNum} ayat`);
     },
     [notify]
   );
 
   const handleResetReadingStats = useCallback(() => {
-    setReadingStats((prev) => ({
-      ...DEFAULT_READING_STATS,
-      dailyTarget: prev.dailyTarget,
-      todayKey: getTodayKey(),
-    }));
+    const next = resetAllReadingStats(readingStatsRef.current, getDateKey());
+    readingStatsRef.current = next;
+    setReadingStats(next);
     notify('Progres target bacaan harian berhasil direset');
   }, [notify]);
 
+  // Pencatatan otomatis 1 ayat terbaca (dari scroll dwell atau selesai audio ayat)
+  const handleAutoVerseRead = useCallback(
+    (surahObj, verseNumber) => {
+      if (!surahObj || !verseNumber) return;
+      const prevStats = readingStatsRef.current;
+      const prevTarget = prevStats.dailyTarget || DEFAULT_READING_STATS.dailyTarget;
+      const todayKey = getDateKey();
+      const prevTodayCount = prevStats.todayKey === todayKey ? prevStats.todayVerses : 0;
+
+      const res = recordVerseRead({
+        stats: prevStats,
+        lastRead: lastReadRef.current,
+        surah: surahObj,
+        verseNumber,
+        todayKey,
+        yesterdayKey: getYesterdayDateKey(),
+      });
+
+      if (!res.changed) return;
+
+      readingStatsRef.current = res.stats;
+      lastReadRef.current = res.lastRead;
+      setReadingStats(res.stats);
+      setLastRead(res.lastRead);
+
+      if (res.newlyCompletedSurah) {
+        notify(`MasyaAllah! Seluruh ayat Surah ${surahObj.namaLatin} telah selesai dibaca`);
+      } else if (
+        res.addedTodayCount > 0 &&
+        prevTodayCount < prevTarget &&
+        res.stats.todayVerses >= prevTarget
+      ) {
+        notify(`Alhamdulillah! Target bacaan harian (${prevTarget} ayat) tercapai hari ini`);
+      }
+    },
+    [notify]
+  );
+
+  // Pencatatan / koreksi manual Terakhir Dibaca per ayat (kumulatif 1..N atau batal)
+  const handleToggleManualLastRead = useCallback(
+    (surahObj, verseNumber) => {
+      if (!surahObj || !verseNumber) return;
+      const prevStats = readingStatsRef.current;
+      const prevTarget = prevStats.dailyTarget || DEFAULT_READING_STATS.dailyTarget;
+      const todayKey = getDateKey();
+      const prevTodayCount = prevStats.todayKey === todayKey ? prevStats.todayVerses : 0;
+
+      const res = setManualLastReadVerse({
+        stats: prevStats,
+        lastRead: lastReadRef.current,
+        surah: surahObj,
+        verseNumber,
+        todayKey,
+        yesterdayKey: getYesterdayDateKey(),
+      });
+
+      if (res.action === 'noop') return;
+
+      readingStatsRef.current = res.stats;
+      lastReadRef.current = res.lastRead;
+      setReadingStats(res.stats);
+      setLastRead(res.lastRead);
+
+      if (res.action === 'unmarked') {
+        notify(`Tanda dibaca QS. ${surahObj.namaLatin}:${verseNumber} dibatalkan`);
+      } else if (res.action === 'corrected') {
+        notify(`Terakhir dibaca dikoreksi ke QS. ${surahObj.namaLatin}:${verseNumber}`);
+      } else if (res.newlyCompletedSurah) {
+        notify(
+          `MasyaAllah! Surah ${surahObj.namaLatin} selesai dibaca & dicatat ke Target Harian`
+        );
+      } else if (
+        res.addedTodayCount > 0 &&
+        prevTodayCount < prevTarget &&
+        res.stats.todayVerses >= prevTarget
+      ) {
+        notify(
+          `Alhamdulillah! Target bacaan harian (${prevTarget} ayat) tercapai di QS. ${surahObj.namaLatin}:${verseNumber}`
+        );
+      } else if (res.addedTodayCount > 0) {
+        notify(
+          `Terakhir dibaca: QS. ${surahObj.namaLatin}:${verseNumber} (+${res.addedTodayCount} ayat hari ini)`
+        );
+      } else {
+        notify(`Terakhir dibaca ditandai di QS. ${surahObj.namaLatin}:${verseNumber}`);
+      }
+    },
+    [notify]
+  );
+
   const handleMarkSurahCompleted = useCallback(
     (surahObj) => {
-      const today = getTodayKey();
-      const yesterday = getYesterdayKey();
-      setReadingStats((prev) => {
-        const baseToday = prev.todayKey === today ? prev.todayVerses : 0;
-        let nextStreak = prev.streak || 0;
-        if (prev.lastReadDateKey !== today) {
-          nextStreak = prev.lastReadDateKey === yesterday ? nextStreak + 1 : 1;
-        }
-        const readSet = new Set(prev.readSurahs || []);
-        readSet.add(surahObj.nomor);
-        return {
-          ...prev,
-          todayKey: today,
-          todayVerses: baseToday + (surahObj.jumlahAyat || 1),
-          lastReadDateKey: today,
-          streak: nextStreak,
-          readSurahs: [...readSet],
-        };
+      const res = markSurahFullyRead({
+        stats: readingStatsRef.current,
+        lastRead: lastReadRef.current,
+        surah: surahObj,
+        todayKey: getDateKey(),
+        yesterdayKey: getYesterdayDateKey(),
       });
-      notify(
-        `Alhamdulillah! +${surahObj.jumlahAyat} ayat (${surahObj.namaLatin}) dicatat ke Target Khatam`
-      );
+
+      readingStatsRef.current = res.stats;
+      lastReadRef.current = res.lastRead;
+      setReadingStats(res.stats);
+      setLastRead(res.lastRead);
+
+      if (res.addedTodayCount > 0) {
+        notify(
+          `Alhamdulillah! +${res.addedTodayCount} ayat (${surahObj.namaLatin}) dicatat ke Target Bacaan Harian`
+        );
+      } else {
+        notify(`Surah ${surahObj.namaLatin} sudah tercatat selesai dibaca hari ini`);
+      }
     },
     [notify]
   );
@@ -622,12 +673,6 @@ export default function HomePage() {
         notify('Audio ayat ini belum tersedia untuk Qari terpilih');
         return;
       }
-      setLastRead({
-        surahNumber: surahData.nomor,
-        surahName: surahData.namaLatin,
-        verseNumber,
-        timestamp: Date.now(),
-      });
       setAudioState((prev) => ({
         active: true,
         isPlaying: true,
@@ -671,12 +716,6 @@ export default function HomePage() {
         setAudioState((prev) => ({ ...prev, isPlaying: false }));
         return;
       }
-      setLastRead({
-        surahNumber: curr.surahNumber,
-        surahName: curr.surahName,
-        verseNumber: nextVerse,
-        timestamp: Date.now(),
-      });
       setAudioState((prev) => ({
         ...prev,
         verseNumber: nextVerse,
@@ -688,10 +727,17 @@ export default function HomePage() {
     []
   );
 
-  // Auto-Next Verse when verse audio finishes
+  // Auto-Next Verse + catat ayat yang baru selesai diputar ke progres bacaan & Terakhir Dibaca
   const handleAudioEnded = useCallback(() => {
     const curr = audioStateRef.current;
     if (!curr.active) return;
+
+    if (curr.mode === 'verse' && curr.surahData && curr.verseNumber) {
+      handleAutoVerseRead(curr.surahData, curr.verseNumber);
+    } else if (curr.mode === 'full' && curr.surahData) {
+      handleMarkSurahCompleted(curr.surahData);
+    }
+
     if (curr.mode === 'verse' && curr.surahData && curr.verseNumber < curr.totalVerses) {
       const nextVerse = curr.verseNumber + 1;
       const ayatObj = curr.surahData.ayat?.find(
@@ -699,12 +745,6 @@ export default function HomePage() {
       );
       const url = ayatObj?.audio?.[settingsRef.current.qariId];
       if (url) {
-        setLastRead({
-          surahNumber: curr.surahNumber,
-          surahName: curr.surahName,
-          verseNumber: nextVerse,
-          timestamp: Date.now(),
-        });
         setAudioState((prev) => ({
           ...prev,
           verseNumber: nextVerse,
@@ -716,7 +756,7 @@ export default function HomePage() {
       }
     }
     setAudioState((prev) => ({ ...prev, isPlaying: false }));
-  }, []);
+  }, [handleAutoVerseRead, handleMarkSurahCompleted]);
 
   const handleJumpToPlaying = useCallback(
     (surahNum, verseNum) => {
@@ -917,6 +957,10 @@ export default function HomePage() {
             verseNotes={verseNotes}
             offlineAudioIndex={offlineAudioIndex}
             onRefreshOfflineAudio={handleRefreshOfflineAudio}
+            readingStats={readingStats}
+            lastRead={lastRead}
+            onAutoVerseRead={handleAutoVerseRead}
+            onToggleManualLastRead={handleToggleManualLastRead}
             onMarkSurahCompleted={handleMarkSurahCompleted}
             isSurahCompleted={Boolean(
               readingStats.readSurahs?.includes(selectedSurahNumber)
@@ -927,7 +971,6 @@ export default function HomePage() {
             onTogglePlayPause={handleTogglePlayPause}
             jumpTargetVerse={jumpTargetVerse}
             onJumpHandled={() => setJumpTargetVerse(null)}
-            onMarkLastRead={handleMarkLastRead}
             onNotify={notify}
           />
         )}

@@ -26,10 +26,12 @@ import {
   Trash2,
   Loader2,
   CheckCircle2,
+  BookCheck,
 } from 'lucide-react';
 import { cleanArabicText, stripHtmlToParagraphs, toArabicDigits } from '@/lib/arabic';
 import { TAJWID_RULES, parseTajwidSegments } from '@/lib/tajwid';
 import { QARIS } from '@/lib/constants';
+import { getSurahReadProgress } from '@/lib/readingProgress';
 import {
   downloadSurahAudioOffline,
   formatBytes,
@@ -114,6 +116,10 @@ export default function QuranReaderView({
   verseNotes,
   offlineAudioIndex,
   onRefreshOfflineAudio,
+  readingStats,
+  lastRead,
+  onAutoVerseRead,
+  onToggleManualLastRead,
   onMarkSurahCompleted,
   isSurahCompleted,
   audioState,
@@ -122,7 +128,6 @@ export default function QuranReaderView({
   onTogglePlayPause,
   jumpTargetVerse,
   onJumpHandled,
-  onMarkLastRead,
   onNotify,
 }) {
   const [jumpInput, setJumpInput] = useState('');
@@ -137,6 +142,10 @@ export default function QuranReaderView({
   const verseRefs = useRef(new Map());
   const tajwidAnchorRef = useRef(null);
   const tajwidCloseTimerRef = useRef(null);
+  const onAutoVerseReadRef = useRef(onAutoVerseRead);
+  const surahRef = useRef(surah);
+  onAutoVerseReadRef.current = onAutoVerseRead;
+  surahRef.current = surah;
 
   const clearTajwidCloseTimer = useCallback(() => {
     if (tajwidCloseTimerRef.current) {
@@ -299,6 +308,105 @@ export default function QuranReaderView({
     return offlineAudioIndex?.[makeAudioKey(surah.nomor, settings.qariId)] || null;
   }, [offlineAudioIndex, surah, settings.qariId]);
 
+  const surahProgress = useMemo(() => {
+    if (!surah) {
+      return { readVerses: [], readCount: 0, totalVerses: 1, percent: 0, isCompleted: false };
+    }
+    return getSurahReadProgress(readingStats, surah.nomor, surah.jumlahAyat);
+  }, [readingStats, surah]);
+
+  const readVerseSet = useMemo(
+    () => new Set(surahProgress.readVerses),
+    [surahProgress.readVerses]
+  );
+
+  // Pelacakan otomatis ayat yang dibaca saat berhenti membaca di viewport (>= 2,5 detik)
+  useEffect(() => {
+    if (loading || !surah || !Array.isArray(surah.ayat) || surah.ayat.length === 0) {
+      return;
+    }
+    if (typeof window === 'undefined' || typeof IntersectionObserver === 'undefined') {
+      return;
+    }
+
+    const DWELL_MS = 2500;
+    const timers = new Map();
+    const visibleSet = new Set();
+
+    const cancelDwell = (verseNum) => {
+      const tid = timers.get(verseNum);
+      if (tid) {
+        window.clearTimeout(tid);
+        timers.delete(verseNum);
+      }
+    };
+
+    const scheduleDwell = (verseNum) => {
+      if (document.hidden || timers.has(verseNum)) return;
+      const tid = window.setTimeout(() => {
+        timers.delete(verseNum);
+        if (!document.hidden && visibleSet.has(verseNum) && surahRef.current) {
+          onAutoVerseReadRef.current?.(surahRef.current, verseNum);
+        }
+      }, DWELL_MS);
+      timers.set(verseNum, tid);
+    };
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const viewportH = window.innerHeight || 800;
+        for (const entry of entries) {
+          const verseNum = Number(entry.target.getAttribute('data-verse-number'));
+          if (!verseNum) continue;
+          const isReadingVisible =
+            entry.isIntersecting &&
+            (entry.intersectionRatio >= 0.35 ||
+              entry.intersectionRect.height >= viewportH * 0.42);
+          if (isReadingVisible) {
+            visibleSet.add(verseNum);
+            scheduleDwell(verseNum);
+          } else {
+            visibleSet.delete(verseNum);
+            cancelDwell(verseNum);
+          }
+        }
+      },
+      {
+        root: null,
+        rootMargin: '-10% 0px -15% 0px',
+        threshold: [0, 0.15, 0.35, 0.55],
+      }
+    );
+
+    for (const el of verseRefs.current.values()) {
+      observer.observe(el);
+    }
+
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        for (const verseNum of [...timers.keys()]) {
+          cancelDwell(verseNum);
+        }
+      } else {
+        for (const verseNum of visibleSet) {
+          scheduleDwell(verseNum);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      observer.disconnect();
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      for (const tid of timers.values()) {
+        window.clearTimeout(tid);
+      }
+      timers.clear();
+      visibleSet.clear();
+    };
+  }, [loading, surah?.nomor, surah?.ayat?.length]);
+
   const scrollToVerse = (verseNum, flash = false) => {
     const el = verseRefs.current.get(Number(verseNum));
     if (!el) return;
@@ -359,7 +467,6 @@ export default function QuranReaderView({
       return;
     }
     scrollToVerse(target, true);
-    onMarkLastRead?.(surah, target);
     setJumpInput('');
   };
 
@@ -859,6 +966,37 @@ export default function QuranReaderView({
         </div>
       )}
 
+      {/* Surah Reading Progress & Daily Target Live Strip */}
+      <section
+        aria-label="Progres bacaan surah dan target harian"
+        className="rounded-2xl border border-emerald-100 bg-white px-4 py-3 shadow-sm dark:border-emerald-900/60 dark:bg-surface-dark space-y-2"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div className="flex items-center gap-2">
+            <BookCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+            <span className="font-bold text-slate-800 dark:text-slate-100 tabular-nums">
+              Progres Surah: {surahProgress.readCount} / {surahProgress.totalVerses} ayat ({surahProgress.percent}%)
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 font-bold text-emerald-700 tabular-nums dark:bg-emerald-950 dark:text-emerald-300">
+              Target Hari Ini: {readingStats?.todayVerses || 0} / {readingStats?.dailyTarget || 20} ayat
+            </span>
+            {lastRead?.surahNumber === surah.nomor && (
+              <span className="rounded-full bg-gold-50 px-2.5 py-0.5 font-bold text-gold-700 dark:bg-gold-950/60 dark:text-gold-300">
+                Terakhir Dibaca: Ayat {lastRead.verseNumber}
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="h-2 w-full overflow-hidden rounded-full bg-emerald-100 dark:bg-emerald-950">
+          <div
+            className="h-full rounded-full bg-emerald-600 transition-all duration-300 dark:bg-emerald-400"
+            style={{ width: `${surahProgress.percent}%` }}
+          />
+        </div>
+      </section>
+
       {/* Verse List */}
       <div className="space-y-4">
         {surah.ayat.map((ayat) => {
@@ -870,6 +1008,11 @@ export default function QuranReaderView({
             audioState.mode === 'verse' &&
             audioState.surahNumber === surah.nomor &&
             audioState.verseNumber === ayat.nomorAyat;
+          const isVerseRead =
+            surahProgress.isCompleted || readVerseSet.has(ayat.nomorAyat);
+          const isLastReadVerse =
+            lastRead?.surahNumber === surah.nomor &&
+            lastRead?.verseNumber === ayat.nomorAyat;
           const isJumpHighlighted = highlightedJumpVerse === ayat.nomorAyat;
           const isCopied = copiedVerse === ayat.nomorAyat;
 
@@ -877,6 +1020,7 @@ export default function QuranReaderView({
             <article
               key={ayat.nomorAyat}
               id={`ayat-${ayat.nomorAyat}`}
+              data-verse-number={ayat.nomorAyat}
               ref={(el) => {
                 if (el) verseRefs.current.set(ayat.nomorAyat, el);
                 else verseRefs.current.delete(ayat.nomorAyat);
@@ -886,16 +1030,20 @@ export default function QuranReaderView({
                   ? 'border-emerald-500 bg-emerald-50/90 ring-2 ring-emerald-500/30 shadow-soft dark:border-emerald-400 dark:bg-emerald-950/70 dark:ring-emerald-400/25'
                   : isJumpHighlighted
                   ? 'border-gold-500 bg-gold-50/70 ring-2 ring-gold-400/40 dark:border-gold-500 dark:bg-gold-950/30'
+                  : isLastReadVerse
+                  ? 'border-emerald-300 bg-emerald-50/35 shadow-sm dark:border-emerald-700/80 dark:bg-emerald-950/25'
                   : 'border-emerald-100/90 bg-white shadow-sm hover:border-emerald-200 dark:border-emerald-900/60 dark:bg-surface-dark dark:hover:border-emerald-800'
               }`}
             >
               {/* Verse Action Row */}
               <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-emerald-50 pb-3 dark:border-emerald-900/50">
-                <div className="flex items-center gap-2.5">
+                <div className="flex flex-wrap items-center gap-2">
                   <span
                     className={`inline-flex h-10 min-w-[44px] items-center justify-center rounded-xl px-2.5 text-sm font-extrabold ${
                       isThisVersePlaying
                         ? 'bg-emerald-600 text-white dark:bg-emerald-400 dark:text-emerald-950'
+                        : isLastReadVerse
+                        ? 'bg-emerald-600 text-white dark:bg-emerald-500 dark:text-emerald-950'
                         : 'bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:ring-emerald-800'
                     }`}
                   >
@@ -912,10 +1060,48 @@ export default function QuranReaderView({
                       <span>Sedang Diputar</span>
                     </span>
                   )}
+
+                  {isLastReadVerse ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-gold-100 px-2.5 py-1 text-[11px] font-extrabold text-gold-800 dark:bg-gold-950/70 dark:text-gold-300">
+                      <BookCheck className="h-3.5 w-3.5" aria-hidden="true" />
+                      <span>Terakhir Dibaca</span>
+                    </span>
+                  ) : (
+                    isVerseRead && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700 dark:bg-emerald-950/70 dark:text-emerald-300">
+                        <CheckCircle2 className="h-3 w-3" aria-hidden="true" />
+                        <span>Dibaca</span>
+                      </span>
+                    )
+                  )}
                 </div>
 
                 {/* Verse Action Buttons (all >=44x44px touch targets) */}
                 <div className="flex flex-wrap items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => onToggleManualLastRead?.(surah, ayat.nomorAyat)}
+                    aria-label={
+                      isLastReadVerse
+                        ? `Batalkan tanda terakhir dibaca pada ayat ${ayat.nomorAyat}`
+                        : `Tandai sampai ayat ${ayat.nomorAyat} sebagai terakhir dibaca`
+                    }
+                    aria-pressed={isLastReadVerse}
+                    title={
+                      isLastReadVerse
+                        ? 'Terakhir Dibaca (klik untuk batal)'
+                        : 'Tandai Terakhir Dibaca (ayat 1 s/d ayat ini)'
+                    }
+                    className={`flex h-11 w-11 items-center justify-center rounded-xl transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
+                      isLastReadVerse
+                        ? 'bg-emerald-600 text-white shadow-sm dark:bg-emerald-500 dark:text-emerald-950'
+                        : isVerseRead
+                        ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/70 dark:text-emerald-300 dark:hover:bg-emerald-900/70'
+                        : 'text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 dark:text-slate-300 dark:hover:bg-emerald-950 dark:hover:text-emerald-300'
+                    }`}
+                  >
+                    <BookCheck className="h-4 w-4" aria-hidden="true" />
+                  </button>
                   <button
                     type="button"
                     onClick={() => {
@@ -1102,23 +1288,37 @@ export default function QuranReaderView({
       <div className="flex flex-col sm:flex-row items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4 dark:border-emerald-900/70 dark:bg-emerald-950/40">
         <div className="text-center sm:text-left">
           <p className="text-sm font-extrabold text-emerald-900 dark:text-emerald-100">
-            Selesai membaca Surah {surah.namaLatin}?
+            {surahProgress.isCompleted
+              ? `Surah ${surah.namaLatin} selesai dibaca`
+              : `Selesai membaca Surah ${surah.namaLatin}?`}
           </p>
           <p className="text-xs text-slate-600 dark:text-slate-300">
-            Catat {surah.jumlahAyat} ayat ini ke Target Khatam &amp; Streak bacaan harian Anda.
+            {surahProgress.isCompleted
+              ? `Seluruh ${surah.jumlahAyat} ayat telah tercatat pada progres surah & Target Khatam Anda.`
+              : surahProgress.readCount > 0
+              ? `Sudah terbaca ${surahProgress.readCount} dari ${surah.jumlahAyat} ayat. Tandai sisa ${
+                  surah.jumlahAyat - surahProgress.readCount
+                } ayat ke Target Bacaan Harian Anda.`
+              : `Catat seluruh ${surah.jumlahAyat} ayat ini ke Target Bacaan Harian & Streak Anda.`}
           </p>
         </div>
         <button
           type="button"
           onClick={() => onMarkSurahCompleted?.(surah)}
           className={`inline-flex min-h-[46px] shrink-0 items-center gap-2 rounded-xl px-4 text-sm font-bold shadow-sm transition-colors cursor-pointer ${
-            isSurahCompleted
+            isSurahCompleted || surahProgress.isCompleted
               ? 'bg-emerald-100 text-emerald-800 ring-1 ring-emerald-300 dark:bg-emerald-900/70 dark:text-emerald-200'
               : 'bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-500 dark:text-emerald-950'
           }`}
         >
           <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-          <span>{isSurahCompleted ? 'Sudah Dicatat (Tambah Lagi)' : 'Tandai Selesai Dibaca'}</span>
+          <span>
+            {isSurahCompleted || surahProgress.isCompleted
+              ? 'Sudah Selesai Dibaca'
+              : surahProgress.readCount > 0
+              ? `Selesaikan (+${surah.jumlahAyat - surahProgress.readCount} ayat)`
+              : 'Tandai Selesai Dibaca'}
+          </span>
         </button>
       </div>
 
